@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tertiary Progression Calculator</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -82,7 +84,8 @@
 
     input[type="date"],
     input[type="time"],
-    input[type="text"] {
+    input[type="text"],
+    .flatpickr-input {
       background: var(--surface2);
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -94,13 +97,12 @@
       width: 100%;
     }
 
-    input:focus { border-color: var(--accent); }
+    input:focus,
+    .flatpickr-input:focus { border-color: var(--accent); }
 
-    input[type="date"]::-webkit-calendar-picker-indicator,
-    input[type="time"]::-webkit-calendar-picker-indicator {
-      filter: invert(0.7) sepia(1) hue-rotate(220deg);
-      cursor: pointer;
-    }
+    /* hide the original input when flatpickr uses altInput */
+    .flatpickr-input.flatpickr-mobile,
+    input.flatpickr-input[type="hidden"] { display: none !important; }
 
     /* Autocomplete */
     .autocomplete-wrap { position: relative; }
@@ -262,11 +264,11 @@
     <div class="grid-3" style="margin-bottom:1rem;">
       <div class="field">
         <label for="birth_date">Birth Date</label>
-        <input type="date" id="birth_date" required />
+        <input type="text" id="birth_date" placeholder="dd/mm/yyyy" required />
       </div>
       <div class="field">
         <label for="birth_time">Birth Time (local)</label>
-        <input type="time" id="birth_time" value="12:00" required />
+        <input type="text" id="birth_time" placeholder="HH:MM" value="12:00" required />
       </div>
       <div class="field">
         <label>Place of Birth</label>
@@ -288,7 +290,7 @@
     <div class="grid-2">
       <div class="field">
         <label for="progression_date">Progression Date</label>
-        <input type="date" id="progression_date" required />
+        <input type="text" id="progression_date" placeholder="dd/mm/yyyy" required />
       </div>
     </div>
 
@@ -496,6 +498,54 @@
   function hideError() {
     document.getElementById('error-msg').style.display = 'none';
   }
+
+  // ── Auto-format helpers ───────────────────────────────────────────────────
+  function autoFormatDate(input) {
+    input.addEventListener('input', function () {
+      const digits = this.value.replace(/\D/g, '').slice(0, 8);
+      let v = digits;
+      if (digits.length > 4)      v = digits.slice(0,2) + '/' + digits.slice(2,4) + '/' + digits.slice(4);
+      else if (digits.length > 2) v = digits.slice(0,2) + '/' + digits.slice(2);
+      this.value = v;
+    });
+  }
+
+  function autoFormatTime(input) {
+    input.addEventListener('input', function () {
+      const digits = this.value.replace(/\D/g, '').slice(0, 4);
+      this.value = digits.length > 2 ? digits.slice(0,2) + ':' + digits.slice(2) : digits;
+    });
+  }
+
+  // ── Flatpickr date/time pickers ───────────────────────────────────────────
+  function initPickers() {
+    const fpBirth = flatpickr('#birth_date', {
+      dateFormat: 'Y-m-d',
+      altInput: true,
+      altFormat: 'd/m/Y',
+      allowInput: true,
+    });
+    autoFormatDate(fpBirth.altInput);
+
+    const fpProg = flatpickr('#progression_date', {
+      dateFormat: 'Y-m-d',
+      altInput: true,
+      altFormat: 'd/m/Y',
+      allowInput: true,
+    });
+    autoFormatDate(fpProg.altInput);
+
+    flatpickr('#birth_time', {
+      enableTime: true,
+      noCalendar: true,
+      time_24hr: true,
+      dateFormat: 'H:i',
+      defaultDate: '12:00',
+      allowInput: true,
+    });
+    autoFormatTime(document.getElementById('birth_time'));
+  }
 </script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr" onload="initPickers()"></script>
 </body>
 </html>
