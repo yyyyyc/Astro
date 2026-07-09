@@ -379,7 +379,7 @@
       const r = await fetch(`/geocode?q=${encodeURIComponent(q)}`);
       const items = await r.json();
       renderDrop(items);
-    } catch { closeDrop(); }
+    } catch (err) { closeDrop(); }
   }
 
   function renderDrop(items) {
@@ -414,7 +414,7 @@
         tzDisplay.textContent = `⏱ ${data.timezone}`;
         tzDisplay.style.display = 'inline-block';
       }
-    } catch { tzDisplay.style.display = 'none'; }
+    } catch (err) { tzDisplay.style.display = 'none'; }
   }
 
   // ── Form submit ───────────────────────────────────────────────────────────
