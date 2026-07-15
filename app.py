@@ -28,9 +28,10 @@ PLANETS = {
     "Moon": ephem.Moon,
 }
 
-# Tertiary progression uses the sidereal month (one day after birth = one sidereal month of life)
+# Tertiary progression: one day after birth = one sidereal month of life
 SIDEREAL_MONTH_DAYS = 27.321661   # Tertiary I
-SYNODIC_MONTH_DAYS  = 29.530589   # Tertiary II
+# Minor progression: one sidereal month after birth = one year of life (converse of Tertiary I)
+TROPICAL_YEAR_DAYS  = 365.242190  # Tertiary II
 
 
 def ecliptic_longitude(planet_class, ephem_date):
@@ -190,8 +191,9 @@ def calculate():
     t1_offset = elapsed_days / SIDEREAL_MONTH_DAYS
     t1_utc = birth_utc + timedelta(days=t1_offset)
 
-    # Tertiary II: 1 synodic (tropical) month of life = 1 day after birth
-    t2_offset = elapsed_days / SYNODIC_MONTH_DAYS
+    # Tertiary II (Minor progression): 1 year of life = 1 sidereal month after birth
+    age_years = elapsed_days / TROPICAL_YEAR_DAYS
+    t2_offset = age_years * SIDEREAL_MONTH_DAYS
     t2_utc = birth_utc + timedelta(days=t2_offset)
 
     # UTC offset at birth time for display
@@ -215,7 +217,7 @@ def calculate():
                 "planets": compute_planets(t1_utc),
             },
             "tertiary2": {
-                "label": "Tertiary II (Synodic Month)",
+                "label": "Tertiary II (Minor Progression)",
                 "offset_days": round(t2_offset, 6),
                 "progressed_chart_date_utc": t2_utc.strftime("%Y-%m-%d %H:%M:%S UTC"),
                 "planets": compute_planets(t2_utc),
