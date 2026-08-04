@@ -1,0 +1,7 @@
+.env
+venv/
+__pycache__/
+*.pyc
+.claude/settings.local.json
+flask_err.txt
+flask_out.txt

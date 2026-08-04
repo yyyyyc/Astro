@@ -5,6 +5,11 @@ from datetime import datetime, timedelta
 import requests
 from timezonefinder import TimezoneFinder
 import pytz
+import os
+from sqlalchemy import create_engine, text
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 app = Flask(__name__)
 
@@ -53,6 +58,17 @@ def longitude_to_zodiac(lon_deg):
 
 def to_ephem_date(dt_utc):
     return ephem.Date(dt_utc.strftime("%Y/%m/%d %H:%M:%S"))
+
+
+def get_engine():
+    db_url = os.environ.get("ASTRO_DB_URL")
+    if not db_url:
+        return None
+    if db_url.startswith("postgresql://"):
+        db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    elif db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
+    return create_engine(db_url)
 
 
 @app.route("/")
@@ -224,6 +240,144 @@ def calculate():
             },
         }
     )
+
+
+def parse_sign_degree(args):
+    sign_name = args.get("sign", "").strip()
+    degree_raw = args.get("degree")
+
+    if sign_name not in ZODIAC_SIGNS:
+        return None, None, (jsonify({"error": "Unknown sign"}), 400)
+    try:
+        degree = int(degree_raw)
+    except (TypeError, ValueError):
+        return None, None, (jsonify({"error": "Invalid degree"}), 400)
+    if not 0 <= degree <= 29:
+        return None, None, (jsonify({"error": "Degree must be between 0 and 29"}), 400)
+
+    sign_id = ZODIAC_SIGNS.index(sign_name) + 1
+    return sign_name, sign_id, degree
+
+
+@app.route("/forecast/tertiary1")
+def tertiary1_forecast():
+    sign_name, sign_id, degree = parse_sign_degree(request.args)
+    if sign_name is None:
+        return degree  # (response, status) error tuple
+
+    engine = get_engine()
+    if engine is None:
+        return jsonify({"error": "ASTRO_DB_URL environment variable is not set."}), 500
+
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    """
+                    SELECT t.forecast_text
+                    FROM tbl_tertiary1_forecasts f
+                    JOIN tbl_tertiary1_forecasts_texts t ON t.forecast_id = f.forecast_id
+                    WHERE f.sign_id = :sign_id AND f.degree = :degree
+                    """
+                ),
+                {"sign_id": sign_id, "degree": degree},
+            ).fetchone()
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    if row is None:
+        return jsonify({"error": "No forecast found for this sign and degree."}), 404
+
+    return jsonify(
+        {
+            "sign": sign_name,
+            "degree": degree,
+            "forecast_text": row.forecast_text,
+        }
+    )
+
+
+@app.route("/forecast/tertiary2")
+def tertiary2_forecast():
+    sign_name, sign_id, degree = parse_sign_degree(request.args)
+    if sign_name is None:
+        return degree  # (response, status) error tuple
+
+    engine = get_engine()
+    if engine is None:
+        return jsonify({"error": "ASTRO_DB_URL environment variable is not set."}), 500
+
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    """
+                    SELECT f.tertiary, t.forecast_text
+                    FROM tbl_tertiary2_forecasts f
+                    JOIN tbl_tertiary2_forecasts_texts t ON t.forecast_id = f.forecast_id
+                    WHERE f.sign_id = :sign_id AND f.degree = :degree
+                    """
+                ),
+                {"sign_id": sign_id, "degree": degree},
+            ).fetchone()
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    if row is None:
+        return jsonify({"error": "No forecast found for this sign and degree."}), 404
+
+    return jsonify(
+        {
+            "sign": sign_name,
+            "degree": degree,
+            "tertiary": row.tertiary,
+            "forecast_text": row.forecast_text,
+        }
+    )
+
+
+@app.route("/signs")
+def signs():
+    engine = get_engine()
+    if engine is None:
+        return "<h2>ASTRO_DB_URL environment variable is not set.</h2>", 500
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text("SELECT id, sign_id, sign_name FROM tbl_signs ORDER BY id")).fetchall()
+    except Exception as exc:
+        return f"<h2>Database error:</h2><pre>{exc}</pre>", 500
+
+    rows_html = "".join(
+        f"<tr><td>{r.id}</td><td>{r.sign_id}</td><td>{r.sign_name}</td></tr>"
+        for r in rows
+    )
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Zodiac Signs</title>
+  <style>
+    body {{ font-family: 'Segoe UI', system-ui, sans-serif; background:#0d0d1a; color:#e2e0ff; padding:2rem; }}
+    h1 {{ color:#a78bfa; margin-bottom:1.5rem; }}
+    table {{ border-collapse:collapse; width:100%; max-width:600px; }}
+    th {{ background:#1a1a38; color:#8884aa; text-transform:uppercase; font-size:0.75rem;
+          letter-spacing:0.08em; padding:0.65rem 1rem; text-align:left;
+          border-bottom:2px solid #2e2e5e; }}
+    td {{ padding:0.7rem 1rem; border-bottom:1px solid #2e2e5e; font-size:0.92rem; }}
+    tr:hover td {{ background:#1a1a38; }}
+    a {{ color:#7c6fcd; text-decoration:none; }}
+    a:hover {{ color:#a78bfa; }}
+  </style>
+</head>
+<body>
+  <h1>&#9890; Zodiac Signs</h1>
+  <table>
+    <thead><tr><th>ID</th><th>Sign ID</th><th>Sign Name</th></tr></thead>
+    <tbody>{rows_html}</tbody>
+  </table>
+  <p style="margin-top:1.5rem"><a href="/">&#8592; Back to calculator</a></p>
+</body>
+</html>"""
 
 
 if __name__ == "__main__":

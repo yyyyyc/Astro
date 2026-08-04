@@ -105,18 +105,19 @@
       right: 0.85rem;
       top: 50%;
       transform: translateY(-50%);
-      pointer-events: none;
       font-size: 1rem;
       color: var(--muted);
+      cursor: pointer;
+      user-select: none;
     }
     input.date-picker-trigger {
       position: absolute;
       right: 0;
       top: 0;
-      width: 2.6rem;
-      height: 100%;
+      width: 0;
+      height: 0;
       opacity: 0;
-      cursor: pointer;
+      pointer-events: none;
       padding: 0;
       border: none;
     }
@@ -266,6 +267,22 @@
     }
 
     .progressed-highlight strong { color: var(--accent2); }
+
+    #t1-tbody tr, #t2-tbody tr { cursor: pointer; }
+    #t1-tbody tr.row-selected td, #t2-tbody tr.row-selected td { background: rgba(124,111,205,0.22); }
+
+    .forecast-panel {
+      display: none;
+      background: var(--surface2);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 0.9rem 1.1rem;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+
+    .forecast-panel .forecast-title { color: var(--accent2); font-weight: 600; margin-bottom: 0.4rem; }
   </style>
 </head>
 <body>
@@ -341,6 +358,7 @@
       </thead>
       <tbody id="t1-tbody"></tbody>
     </table>
+    <div class="forecast-panel" id="t1-forecast"></div>
   </div>
 
   <div class="card">
@@ -352,6 +370,7 @@
       </thead>
       <tbody id="t2-tbody"></tbody>
     </table>
+    <div class="forecast-panel" id="t2-forecast"></div>
   </div>
 </div>
 
@@ -459,7 +478,7 @@
     }
   });
 
-  function buildPlanetRows(planets, tbodyId) {
+  function buildPlanetRows(planets, tbodyId, options = {}) {
     const tbody = document.getElementById(tbodyId);
     tbody.innerHTML = '';
     planets.forEach(p => {
@@ -483,9 +502,47 @@
           </div></td>
           <td class="deg-cell">${p.degrees}° ${String(p.minutes).padStart(2,'0')}' ${String(p.seconds).padStart(2,'0')}"</td>
           <td class="lon-cell">${p.longitude.toFixed(4)}°</td>`;
+        if (options.selectable) {
+          tr.addEventListener('click', () => selectForecastRow(p, tr, options));
+        }
       }
       tbody.appendChild(tr);
     });
+  }
+
+  // ── Tertiary forecast lookup ──────────────────────────────────────────────
+  const activeForecastRows = {};
+
+  async function selectForecastRow(p, trEl, { endpoint, panelId, tertiaryLabel }) {
+    const prevRow = activeForecastRows[panelId];
+    if (prevRow) prevRow.classList.remove('row-selected');
+    trEl.classList.add('row-selected');
+    activeForecastRows[panelId] = trEl;
+
+    const panel = document.getElementById(panelId);
+    panel.style.display = 'block';
+    panel.innerHTML = 'Loading forecast…';
+
+    try {
+      const r = await fetch(`${endpoint}?sign=${encodeURIComponent(p.sign)}&degree=${p.degrees}`);
+      const data = await r.json();
+      if (!r.ok) {
+        panel.innerHTML = `<span style="color:#fca5a5;">${data.error || 'No forecast available.'}</span>`;
+        return;
+      }
+      panel.innerHTML = `
+        <div class="forecast-title">${data.sign} ${data.degree}° &mdash; ${tertiaryLabel}</div>
+        <div>${data.forecast_text}</div>`;
+    } catch (err) {
+      panel.innerHTML = `<span style="color:#fca5a5;">Network error: ${err.message}</span>`;
+    }
+  }
+
+  function resetForecastPanel(panelId) {
+    delete activeForecastRows[panelId];
+    const panel = document.getElementById(panelId);
+    panel.style.display = 'none';
+    panel.innerHTML = '';
   }
 
   function renderResults(data) {
@@ -506,13 +563,19 @@
     document.getElementById('t1-label').innerHTML =
       `Progressed chart: <strong>${data.tertiary1.progressed_chart_date_utc}</strong>` +
       ` &nbsp;(${data.tertiary1.offset_days} days after birth)`;
-    buildPlanetRows(data.tertiary1.planets, 't1-tbody');
+    resetForecastPanel('t1-forecast');
+    buildPlanetRows(data.tertiary1.planets, 't1-tbody', {
+      selectable: true, endpoint: '/forecast/tertiary1', panelId: 't1-forecast', tertiaryLabel: 'Tertiary I',
+    });
 
     // Tertiary II
     document.getElementById('t2-label').innerHTML =
       `Progressed chart: <strong>${data.tertiary2.progressed_chart_date_utc}</strong>` +
       ` &nbsp;(${data.tertiary2.offset_days} days after birth)`;
-    buildPlanetRows(data.tertiary2.planets, 't2-tbody');
+    resetForecastPanel('t2-forecast');
+    buildPlanetRows(data.tertiary2.planets, 't2-tbody', {
+      selectable: true, endpoint: '/forecast/tertiary2', panelId: 't2-forecast', tertiaryLabel: 'Tertiary II',
+    });
 
     document.getElementById('results').style.display = 'block';
     document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -550,6 +613,10 @@
     const text = document.getElementById(textId);
     const picker = document.getElementById(pickerId);
     autoFormatDate(text);
+    const icon = text.closest('.date-field').querySelector('.date-icon');
+    icon.addEventListener('click', () => {
+      try { picker.showPicker(); } catch(e) { picker.focus(); }
+    });
     picker.addEventListener('change', () => {
       if (!picker.value) return;
       const [y, mo, d] = picker.value.split('-');
