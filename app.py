@@ -60,6 +60,84 @@ def to_ephem_date(dt_utc):
     return ephem.Date(dt_utc.strftime("%Y/%m/%d %H:%M:%S"))
 
 
+def localize(local_tz, naive_dt):
+    """Attach local_tz to a naive datetime, resolving DST gaps/overlaps the same way /calculate does."""
+    try:
+        return local_tz.localize(naive_dt, is_dst=None)
+    except pytz.exceptions.AmbiguousTimeError:
+        return local_tz.localize(naive_dt, is_dst=False)
+    except pytz.exceptions.NonExistentTimeError:
+        return local_tz.localize(naive_dt + timedelta(hours=1), is_dst=True)
+
+
+# ── Moon of Transit ──────────────────────────────────────────────────────────
+# The Moon moves at most ~15.4°/day, so a 3-hour step (< 2°) can never skip a 30° sign.
+MOON_SEARCH_STEP = timedelta(hours=3)
+HOUSE_ORDINALS = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"]
+
+
+def moon_sign_index(dt_utc):
+    return int(ecliptic_longitude(ephem.Moon, to_ephem_date(dt_utc)) // 30) % 12
+
+
+def moon_sign_boundary(dt_utc, sign_idx, forward=True):
+    """Find when the Moon leaves (forward) or entered (backward) sign_idx, to within one second."""
+    step = MOON_SEARCH_STEP if forward else -MOON_SEARCH_STEP
+    inside, outside = dt_utc, dt_utc + step
+    while moon_sign_index(outside) == sign_idx:
+        inside, outside = outside, outside + step
+    while abs((outside - inside).total_seconds()) > 1:
+        mid = inside + (outside - inside) / 2
+        if moon_sign_index(mid) == sign_idx:
+            inside = mid
+        else:
+            outside = mid
+    # Forward: first moment in the next sign. Backward: first moment in this sign.
+    return outside if forward else inside
+
+
+def resolve_timezone(lat, lon):
+    tz_name = TimezoneFinder().timezone_at(lat=lat, lng=lon)
+    if not tz_name:
+        raise ValueError("Could not determine timezone for this location")
+    return pytz.timezone(tz_name)
+
+
+def moon_of_transit(lat, lon, local_naive):
+    """
+    Moon of Transit: the tropical sign the Moon occupies at the given location and local date/time.
+    Returns {"sign", "start", "end"}, with start/end as timezone-aware datetimes in the location's timezone.
+    """
+    local_tz = resolve_timezone(lat, lon)
+    dt_utc = localize(local_tz, local_naive).astimezone(pytz.utc)
+    sign_idx = moon_sign_index(dt_utc)
+    return {
+        "sign": ZODIAC_SIGNS[sign_idx],
+        "start": moon_sign_boundary(dt_utc, sign_idx, forward=False).astimezone(local_tz),
+        "end": moon_sign_boundary(dt_utc, sign_idx, forward=True).astimezone(local_tz),
+    }
+
+
+def moon_transit_table(lat, lon, local_naive, count=12):
+    """The current Moon of Transit followed by the next count-1 signs, each with local start/end times."""
+    current = moon_of_transit(lat, lon, local_naive)
+    local_tz = pytz.timezone(current["start"].tzinfo.zone)
+    periods = [current]
+    while len(periods) < count:
+        start = periods[-1]["end"]
+        sign_idx = (ZODIAC_SIGNS.index(periods[-1]["sign"]) + 1) % 12
+        end = moon_sign_boundary(start.astimezone(pytz.utc), sign_idx, forward=True)
+        periods.append({"sign": ZODIAC_SIGNS[sign_idx], "start": start, "end": end.astimezone(local_tz)})
+    return periods
+
+
+def sun_sign_on(date_obj):
+    """Natal Sun sign for a date of birth; noon UTC is used since no birth time is given."""
+    noon_utc = pytz.utc.localize(datetime(date_obj.year, date_obj.month, date_obj.day, 12))
+    sign, _, _, _ = longitude_to_zodiac(ecliptic_longitude(ephem.Sun, to_ephem_date(noon_utc)))
+    return sign
+
+
 def get_engine():
     db_url = os.environ.get("ASTRO_DB_URL")
     if not db_url:
@@ -112,6 +190,99 @@ def get_timezone():
         return jsonify({"timezone": tz_name or "UTC"})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/reverse-geocode")
+def reverse_geocode():
+    try:
+        lat = float(request.args.get("lat"))
+        lon = float(request.args.get("lon"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid coordinates"}), 400
+    try:
+        resp = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"lat": lat, "lon": lon, "format": "json", "zoom": 10, "accept-language": "en"},
+            headers={"User-Agent": "TertiaryProgressionApp/1.0", "Accept-Language": "en"},
+            timeout=5,
+        )
+        return jsonify({"name": resp.json().get("display_name") or f"{lat:.4f}, {lon:.4f}"})
+    except Exception:
+        return jsonify({"name": f"{lat:.4f}, {lon:.4f}"})
+
+
+@app.route("/moon-transit")
+def moon_transit_page():
+    return render_template("moon_transit.html")
+
+
+@app.route("/moon-transit/calculate", methods=["POST"])
+def moon_transit_calculate():
+    data = request.get_json() or {}
+
+    required = ["lat", "lon", "date", "time"]
+    missing = [f for f in required if f not in data or str(data[f]).strip() == ""]
+    if missing:
+        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+
+    try:
+        lat = float(data["lat"])
+        lon = float(data["lon"])
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid coordinates"}), 400
+
+    try:
+        local_naive = datetime.strptime(f"{data['date']} {data['time']}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        return jsonify({"error": "Invalid date or time"}), 400
+
+    sun_sign = None
+    if str(data.get("dob") or "").strip():
+        try:
+            sun_sign = sun_sign_on(datetime.strptime(data["dob"], "%Y-%m-%d").date())
+        except ValueError:
+            return jsonify({"error": "Invalid date of birth"}), 400
+
+    try:
+        periods = moon_transit_table(lat, lon, local_naive)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    def fmt(dt):
+        return dt.strftime("%a %d/%m/%Y %H:%M")
+
+    selected = localize(pytz.timezone(periods[0]["start"].tzinfo.zone), local_naive)
+
+    rows = []
+    for p in periods:
+        midpoint = p["start"] + (p["end"] - p["start"]) / 2
+        row = {
+            "sign": p["sign"],
+            "sign_symbol": ZODIAC_SYMBOLS[p["sign"]],
+            "start": fmt(p["start"]),
+            "end": fmt(p["end"]),
+            "midpoint": fmt(midpoint.astimezone(p["start"].tzinfo)),
+            "duration_hours": round((p["end"] - p["start"]).total_seconds() / 3600, 1),
+            # 1 = selected date/time falls in the first half of this sign's time frame, 2 = second half
+            "forecast_group": 1 if selected < midpoint else 2,
+        }
+        if sun_sign:
+            house = (ZODIAC_SIGNS.index(p["sign"]) - ZODIAC_SIGNS.index(sun_sign)) % 12
+            row["house"] = HOUSE_ORDINALS[house]
+            row["house_number"] = house + 1
+        rows.append(row)
+
+    current = periods[0]
+    return jsonify(
+        {
+            "timezone": str(current["start"].tzinfo.zone),
+            "selected_local": local_naive.strftime("%a %d/%m/%Y %H:%M"),
+            "current": rows[0],
+            "sun_sign": sun_sign,
+            "sun_sign_symbol": ZODIAC_SYMBOLS.get(sun_sign, ""),
+            "periods": rows,
+        }
+    )
 
 
 @app.route("/calculate", methods=["POST"])
@@ -331,6 +502,50 @@ def tertiary2_forecast():
             "sign": sign_name,
             "degree": degree,
             "tertiary": row.tertiary,
+            "forecast_text": row.forecast_text,
+        }
+    )
+
+
+@app.route("/forecast/moon-transit")
+def moon_transit_forecast():
+    try:
+        house = int(request.args.get("house"))
+        group = int(request.args.get("group"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid house or forecast group"}), 400
+    if not 1 <= house <= 12:
+        return jsonify({"error": "House must be between 1 and 12"}), 400
+    if group not in (1, 2):
+        return jsonify({"error": "Forecast group must be 1 or 2"}), 400
+
+    engine = get_engine()
+    if engine is None:
+        return jsonify({"error": "ASTRO_DB_URL environment variable is not set."}), 500
+
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    """
+                    SELECT t.forecast_text
+                    FROM tbl_moon_of_transit_daily_forecasts f
+                    JOIN tbl_moon_of_transit_daily_forecasts_texts t ON t.forecast_id = f.forecast_id
+                    WHERE f.moon_location = :house AND f.forecast_group = :group
+                    """
+                ),
+                {"house": house, "group": group},
+            ).fetchone()
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    if row is None or not row.forecast_text:
+        return jsonify({"error": "No forecast found for this house."}), 404
+
+    return jsonify(
+        {
+            "house": HOUSE_ORDINALS[house - 1],
+            "forecast_group": group,
             "forecast_text": row.forecast_text,
         }
     )

@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Moon of Transit</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d1a;
+      --surface: #13132b;
+      --surface2: #1a1a38;
+      --border: #2e2e5e;
+      --accent: #7c6fcd;
+      --accent2: #a78bfa;
+      --text: #e2e0ff;
+      --muted: #8884aa;
+      --gold: #f0c060;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent2);
+      margin-bottom: 0.3rem;
+      letter-spacing: 0.04em;
+    }
+
+    .subtitle { text-align: center; color: var(--muted); font-size: 0.9rem; margin-bottom: 2rem; }
+    .back-link { display: block; max-width: 720px; margin: 0 auto 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .back-link:hover { color: var(--accent2); }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      max-width: 720px;
+      margin: 0 auto 2rem;
+    }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent2);
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+    @media (max-width: 540px) { .grid-3 { grid-template-columns: 1fr; } }
+
+    .field { display: flex; flex-direction: column; gap: 0.35rem; }
+    label { font-size: 0.82rem; color: var(--muted); font-weight: 500; }
+
+    input[type="date"], input[type="time"], input[type="text"] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 0.6rem 0.85rem;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+      width: 100%;
+      color-scheme: dark;
+    }
+    input:focus { border-color: var(--accent); }
+
+    .date-field { position: relative; }
+    .date-field input[type="text"] { padding-right: 2.4rem; }
+    .date-icon {
+      position: absolute; right: 0.85rem; top: 50%; transform: translateY(-50%);
+      font-size: 1rem; color: var(--muted); cursor: pointer; user-select: none;
+    }
+    input.date-picker-trigger {
+      position: absolute; right: 0; top: 0; width: 0; height: 0;
+      opacity: 0; pointer-events: none; padding: 0; border: none;
+    }
+
+    .autocomplete-wrap { position: relative; }
+    .autocomplete-drop {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      z-index: 100; max-height: 220px; overflow-y: auto; display: none;
+    }
+    .autocomplete-drop.open { display: block; }
+    .ac-item {
+      padding: 0.6rem 0.9rem; font-size: 0.85rem; cursor: pointer;
+      border-bottom: 1px solid var(--border); line-height: 1.4; transition: background 0.15s;
+    }
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover { background: var(--border); }
+
+    .hint { font-size: 0.78rem; color: var(--muted); }
+    .loc-btn {
+      align-self: flex-start; background: none; border: none; color: var(--accent);
+      font-size: 0.78rem; cursor: pointer; padding: 0;
+    }
+    .loc-btn:hover { color: var(--accent2); }
+
+    button[type="submit"] {
+      display: block; width: 100%; margin-top: 1.5rem; padding: 0.85rem;
+      background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
+      font-size: 1rem; font-weight: 600; cursor: pointer; letter-spacing: 0.04em;
+      transition: background 0.2s, transform 0.1s;
+    }
+    button[type="submit"]:hover { background: var(--accent2); transform: translateY(-1px); }
+    button[type="submit"]:disabled { background: var(--border); cursor: not-allowed; transform: none; }
+
+    #error-msg {
+      display: none; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4);
+      border-radius: 8px; color: #fca5a5; padding: 0.75rem 1rem; margin-top: 1rem; font-size: 0.9rem;
+    }
+
+    #results { display: none; max-width: 1040px; margin: 0 auto; }
+    #results .card { max-width: none; }
+
+    .current {
+      display: flex; align-items: center; gap: 1rem;
+      background: rgba(124,111,205,0.1); border: 1px solid var(--accent);
+      border-radius: 8px; padding: 0.9rem 1.1rem; margin-bottom: 1.25rem;
+    }
+    .current-sym { font-size: 2.4rem; line-height: 1; }
+    .current-sign { font-size: 1.2rem; font-weight: 700; color: var(--gold); }
+    .current-range { font-size: 0.85rem; color: var(--muted); margin-top: 0.2rem; }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: var(--surface2); padding: 0.65rem 0.9rem; text-align: left;
+      font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted); border-bottom: 2px solid var(--border); white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr.is-current td { background: rgba(124,111,205,0.18); }
+    td { padding: 0.7rem 0.9rem; font-size: 0.9rem; vertical-align: middle; white-space: nowrap; }
+    .sign-cell { display: flex; align-items: center; gap: 0.4rem; }
+    .sign-sym { font-size: 1.2rem; }
+    .time-cell { font-family: 'Courier New', monospace; font-size: 0.86rem; }
+    .muted-cell { color: var(--muted); font-size: 0.85rem; }
+    .house-cell { color: var(--accent2); font-weight: 600; }
+    tbody tr.row-selected td { background: rgba(124,111,205,0.3); }
+
+    .forecast-btn {
+      background: none; border: 1px solid var(--accent); border-radius: 6px;
+      color: var(--accent2); font-size: 0.8rem; font-weight: 600; padding: 0.3rem 0.7rem; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .forecast-btn:hover:not(:disabled) { background: rgba(124,111,205,0.25); }
+    .forecast-btn:disabled { border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+
+    .forecast-panel {
+      display: none; background: var(--surface2); border: 1px solid var(--accent);
+      border-radius: 8px; padding: 0.9rem 1.1rem; margin-top: 1rem; font-size: 0.95rem; line-height: 1.6;
+    }
+    .forecast-panel .forecast-title { color: var(--accent2); font-weight: 600; margin-bottom: 0.4rem; }
+  </style>
+</head>
+<body>
+
+<a class="back-link" href="/">&#8592; Back to calculator</a>
+<h1>☽ Moon of Transit</h1>
+<p class="subtitle">The sign the Moon is transiting now, and when it enters and leaves each sign after that</p>
+
+<div class="card">
+  <form id="moon-form" autocomplete="off">
+    <p class="section-title">Location &amp; Time</p>
+    <div class="grid-3" style="margin-bottom:1rem;">
+      <div class="field">
+        <label for="place_input">Location</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="place_input" placeholder="Detecting current location…" required />
+          <div class="autocomplete-drop" id="place_drop"></div>
+        </div>
+        <button type="button" class="loc-btn" id="use-current">&#8982; Use current location</button>
+      </div>
+      <div class="field">
+        <label for="date">Date</label>
+        <div class="date-field">
+          <input type="text" id="date" placeholder="dd/mm/yyyy" inputmode="numeric" required />
+          <span class="date-icon" aria-hidden="true">&#128197;</span>
+          <input type="date" id="date_picker" class="date-picker-trigger" tabindex="-1" aria-label="Pick date" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="time">Time (local)</label>
+        <input type="time" id="time" required />
+      </div>
+    </div>
+
+    <input type="hidden" id="lat" />
+    <input type="hidden" id="lon" />
+
+    <p class="section-title" style="margin-top:1.2rem;">Date of Birth (optional)</p>
+    <div class="grid-3">
+      <div class="field">
+        <label for="dob">Date of Birth</label>
+        <div class="date-field">
+          <input type="text" id="dob" placeholder="dd/mm/yyyy" inputmode="numeric" />
+          <span class="date-icon" aria-hidden="true">&#128197;</span>
+          <input type="date" id="dob_picker" class="date-picker-trigger" tabindex="-1" aria-label="Pick date of birth" />
+        </div>
+      </div>
+    </div>
+    <p class="hint" style="margin-top:0.5rem;">If filled, the table also shows which house the Moon occupies counted from your Sun sign.</p>
+
+    <div id="error-msg"></div>
+    <button type="submit" id="submit-btn">Show Moon of Transit</button>
+  </form>
+</div>
+
+<div id="results">
+  <div class="card">
+    <p class="section-title">Moon of Transit</p>
+    <div class="current" id="current"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr id="table-head"></tr></thead>
+        <tbody id="moon-tbody"></tbody>
+      </table>
+    </div>
+    <div class="forecast-panel" id="forecast-panel"></div>
+    <p class="hint" style="margin-top:0.9rem;" id="tz-note"></p>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  // ── Location: current position + autocomplete ─────────────────────────────
+  let acTimer = null;
+  const placeInput = $('place_input');
+  const placeDrop  = $('place_drop');
+
+  placeInput.addEventListener('input', () => {
+    clearTimeout(acTimer);
+    $('lat').value = ''; $('lon').value = '';
+    const q = placeInput.value.trim();
+    if (q.length < 2) { closeDrop(); return; }
+    acTimer = setTimeout(() => fetchPlaces(q), 320);
+  });
+  placeInput.addEventListener('blur', () => setTimeout(closeDrop, 180));
+
+  async function fetchPlaces(q) {
+    try {
+      const r = await fetch(`/geocode?q=${encodeURIComponent(q)}`);
+      renderDrop(await r.json());
+    } catch (err) { closeDrop(); }
+  }
+
+  function renderDrop(items) {
+    if (!Array.isArray(items) || !items.length) { closeDrop(); return; }
+    placeDrop.innerHTML = '';
+    items.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'ac-item';
+      div.textContent = item.name;
+      div.addEventListener('mousedown', () => setPlace(item));
+      placeDrop.appendChild(div);
+    });
+    placeDrop.classList.add('open');
+  }
+
+  function closeDrop() { placeDrop.classList.remove('open'); }
+
+  function setPlace(item) {
+    placeInput.value = item.name;
+    $('lat').value = item.lat;
+    $('lon').value = item.lon;
+    closeDrop();
+  }
+
+  function useCurrentLocation(autoSubmit) {
+    if (!navigator.geolocation) {
+      placeInput.placeholder = 'Start typing a city…';
+      return;
+    }
+    placeInput.placeholder = 'Detecting current location…';
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const lat = pos.coords.latitude, lon = pos.coords.longitude;
+      let name = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+      try {
+        const r = await fetch(`/reverse-geocode?lat=${lat}&lon=${lon}`);
+        name = (await r.json()).name || name;
+      } catch (err) { /* keep coordinates as the label */ }
+      setPlace({ name, lat, lon });
+      if (autoSubmit) calculate();
+    }, () => {
+      placeInput.placeholder = 'Start typing a city…';
+      showError('Current location unavailable — please type a location.');
+    }, { timeout: 10000 });
+  }
+
+  $('use-current').addEventListener('click', () => { hideError(); useCurrentLocation(false); });
+
+  // ── Submit ────────────────────────────────────────────────────────────────
+  $('moon-form').addEventListener('submit', e => { e.preventDefault(); calculate(); });
+
+  async function calculate() {
+    hideError();
+    const lat = $('lat').value, lon = $('lon').value;
+    if (!lat || !lon) { showError('Please select a location from the list.'); return; }
+
+    const dateIso = dmyToIso($('date').value);
+    if (!dateIso) { showError('Please enter the date as dd/mm/yyyy.'); return; }
+
+    const dobText = $('dob').value.trim();
+    const dobIso = dobText ? dmyToIso(dobText) : '';
+    if (dobText && !dobIso) { showError('Please enter the date of birth as dd/mm/yyyy.'); return; }
+
+    $('submit-btn').disabled = true;
+    try {
+      const r = await fetch('/moon-transit/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat: parseFloat(lat), lon: parseFloat(lon),
+          date: dateIso, time: $('time').value, dob: dobIso,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) { showError(data.error || 'Calculation failed.'); return; }
+      renderResults(data);
+    } catch (err) {
+      showError('Network error: ' + err.message);
+    } finally {
+      $('submit-btn').disabled = false;
+    }
+  }
+
+  function renderResults(data) {
+    const c = data.current;
+    $('current').innerHTML = `
+      <span class="current-sym">${c.sign_symbol}</span>
+      <div>
+        <div class="current-sign">Moon in ${c.sign}${c.house ? ` &mdash; your ${c.house} house` : ''}</div>
+        <div class="current-range">From ${c.start} &nbsp;to&nbsp; ${c.end}</div>
+      </div>`;
+
+    const houseHead = data.sun_sign ? `<th>House from ${data.sun_sign_symbol} ${data.sun_sign}</th>` : '';
+    $('table-head').innerHTML = `<th>Sign</th><th>Starts</th><th>Ends</th><th>Duration</th>${houseHead}<th></th>`;
+
+    const forecastTitle = data.sun_sign ? '' : 'Enter a date of birth to get forecasts';
+    $('moon-tbody').innerHTML = data.periods.map((p, i) => `
+      <tr class="${i === 0 ? 'is-current' : ''}">
+        <td><div class="sign-cell"><span class="sign-sym">${p.sign_symbol}</span><span>${p.sign}</span></div></td>
+        <td class="time-cell">${p.start}</td>
+        <td class="time-cell">${p.end}</td>
+        <td class="muted-cell">${p.duration_hours} h</td>
+        ${data.sun_sign ? `<td class="house-cell">${p.house}</td>` : ''}
+        <td><button type="button" class="forecast-btn" data-index="${i}" title="${forecastTitle}"
+             ${data.sun_sign ? '' : 'disabled'}>Forecast</button></td>
+      </tr>`).join('');
+
+    $('moon-tbody').querySelectorAll('.forecast-btn').forEach(btn => {
+      btn.addEventListener('click', () => showForecast(data.periods[btn.dataset.index], btn.closest('tr')));
+    });
+    $('forecast-panel').style.display = 'none';
+
+    $('tz-note').textContent =
+      `Selected: ${data.selected_local} · All times shown in ${data.timezone}` +
+      (data.sun_sign ? ` · Sun sign from date of birth: ${data.sun_sign}` : '');
+
+    $('results').style.display = 'block';
+  }
+
+  // ── Forecast lookup ───────────────────────────────────────────────────────
+  async function showForecast(p, trEl) {
+    $('moon-tbody').querySelectorAll('tr.row-selected').forEach(tr => tr.classList.remove('row-selected'));
+    trEl.classList.add('row-selected');
+
+    const panel = $('forecast-panel');
+    panel.style.display = 'block';
+    panel.textContent = 'Loading forecast…';
+
+    const half = p.forecast_group === 1 ? 'first half' : 'second half';
+    try {
+      const r = await fetch(`/forecast/moon-transit?house=${p.house_number}&group=${p.forecast_group}`);
+      const data = r.headers.get('content-type')?.includes('json')
+        ? await r.json() : { error: `Server returned HTTP ${r.status}` };
+      if (!r.ok) {
+        panel.innerHTML = `<span style="color:#fca5a5;">${data.error || 'No forecast available.'}</span>`;
+        return;
+      }
+      panel.innerHTML = `
+        <div class="forecast-title">${p.sign_symbol} Moon in ${p.sign} &mdash; ${data.house} house, ${half}
+          <span class="hint">(midpoint ${p.midpoint})</span></div>
+        <div dir="auto"></div>`;
+      panel.querySelector('[dir="auto"]').textContent = data.forecast_text;
+    } catch (err) {
+      panel.innerHTML = `<span style="color:#fca5a5;">Network error: ${err.message}</span>`;
+    }
+  }
+
+  function showError(msg) { const el = $('error-msg'); el.textContent = msg; el.style.display = 'block'; }
+  function hideError() { $('error-msg').style.display = 'none'; }
+
+  // ── dd/mm/yyyy date fields ────────────────────────────────────────────────
+  function autoFormatDate(input) {
+    input.addEventListener('input', function () {
+      const digits = this.value.replace(/\D/g, '').slice(0, 8);
+      let v = digits;
+      if (digits.length > 4)      v = digits.slice(0,2) + '/' + digits.slice(2,4) + '/' + digits.slice(4);
+      else if (digits.length > 2) v = digits.slice(0,2) + '/' + digits.slice(2);
+      this.value = v;
+    });
+  }
+
+  function dmyToIso(str) {
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(str.trim());
+    if (!m) return null;
+    const [, d, mo, y] = m;
+    return `${y}-${mo}-${d}`;
+  }
+
+  function wireDatePicker(textId, pickerId) {
+    const text = $(textId);
+    const picker = $(pickerId);
+    autoFormatDate(text);
+    text.closest('.date-field').querySelector('.date-icon').addEventListener('click', () => {
+      try { picker.showPicker(); } catch (e) { picker.focus(); }
+    });
+    picker.addEventListener('change', () => {
+      if (!picker.value) return;
+      const [y, mo, d] = picker.value.split('-');
+      text.value = `${d}/${mo}/${y}`;
+    });
+  }
+
+  wireDatePicker('date', 'date_picker');
+  wireDatePicker('dob', 'dob_picker');
+
+  // ── Defaults: now + current location ──────────────────────────────────────
+  const pad = n => String(n).padStart(2, '0');
+  const now = new Date();
+  $('date').value = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+  $('time').value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  useCurrentLocation(true);
+</script>
+</body>
+</html>
