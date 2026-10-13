@@ -642,11 +642,32 @@
   wireDatePicker('birth_date', 'birth_date_picker');
   wireDatePicker('progression_date', 'progression_date_picker');
 
-  // Default both dates to today
+  // ── Defaults: today's date, current location ───────────────────────────────
+  function setDefaultDate(textId, pickerId, date) {
+    const d  = String(date.getDate()).padStart(2, '0');
+    const mo = String(date.getMonth() + 1).padStart(2, '0');
+    const y  = date.getFullYear();
+    document.getElementById(textId).value = `${d}/${mo}/${y}`;
+    document.getElementById(pickerId).value = `${y}-${mo}-${d}`;
+  }
+
   const today = new Date();
-  const todayDmy = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
-  document.getElementById('birth_date').value = todayDmy;
-  document.getElementById('progression_date').value = todayDmy;
+  setDefaultDate('birth_date', 'birth_date_picker', today);
+  setDefaultDate('progression_date', 'progression_date_picker', today);
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      if (placeInput.value.trim()) return;  // user already started typing
+      try {
+        const { latitude, longitude } = pos.coords;
+        const r = await fetch(`/reverse-geocode?lat=${latitude}&lon=${longitude}`);
+        const item = await r.json();
+        if (item.error || placeInput.value.trim()) return;
+        selectPlace(item);
+      } catch (err) { /* leave the field empty */ }
+    }, () => { /* permission denied or unavailable: leave the field empty */ },
+    { timeout: 10000, maximumAge: 600000 });
+  }
 </script>
 </body>
 </html>
