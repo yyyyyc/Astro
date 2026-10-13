@@ -221,25 +221,6 @@ def get_timezone():
         return jsonify({"error": str(exc)}), 400
 
 
-@app.route("/reverse-geocode")
-def reverse_geocode():
-    try:
-        lat = float(request.args.get("lat"))
-        lon = float(request.args.get("lon"))
-    except (TypeError, ValueError):
-        return jsonify({"error": "Invalid coordinates"}), 400
-    try:
-        resp = requests.get(
-            "https://nominatim.openstreetmap.org/reverse",
-            params={"lat": lat, "lon": lon, "format": "json", "zoom": 10, "accept-language": "en"},
-            headers={"User-Agent": "TertiaryProgressionApp/1.0", "Accept-Language": "en"},
-            timeout=5,
-        )
-        return jsonify({"name": resp.json().get("display_name") or f"{lat:.4f}, {lon:.4f}"})
-    except Exception:
-        return jsonify({"name": f"{lat:.4f}, {lon:.4f}"})
-
-
 @app.route("/moon-transit")
 def moon_transit_page():
     return render_template("moon_transit.html")
