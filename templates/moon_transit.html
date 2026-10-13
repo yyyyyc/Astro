@@ -83,6 +83,17 @@
 
     .date-field { position: relative; }
     .date-field input[type="text"] { padding-right: 2.4rem; }
+    .date-field input[type="text"].has-sign { padding-right: 4.4rem; }
+    .sign-badge {
+      position: absolute;
+      right: 2.6rem;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.15rem;
+      color: var(--accent2);
+      cursor: default;
+      user-select: none;
+    }
     .date-icon {
       position: absolute; right: 0.85rem; top: 50%; transform: translateY(-50%);
       font-size: 1rem; color: var(--muted); cursor: pointer; user-select: none;
@@ -213,6 +224,7 @@
         <label for="dob">Date of Birth</label>
         <div class="date-field">
           <input type="text" id="dob" placeholder="dd/mm/yyyy" inputmode="numeric" />
+          <span class="sign-badge" role="img" hidden></span>
           <span class="date-icon" aria-hidden="true">&#128197;</span>
           <input type="date" id="dob_picker" class="date-picker-trigger" tabindex="-1" aria-label="Pick date of birth" />
         </div>
@@ -446,6 +458,35 @@
   wireDatePicker('date', 'date_picker');
   wireDatePicker('dob', 'dob_picker');
 
+  // ── Sun-sign badge for birthday fields ─────────────────────────────────────
+  function wireSignBadge(textId) {
+    const text  = document.getElementById(textId);
+    const badge = text.closest('.date-field').querySelector('.sign-badge');
+    let seq = 0;
+    const hide = () => { badge.hidden = true; text.classList.remove('has-sign'); };
+    async function update() {
+      const my = ++seq;
+      const iso = dmyToIso(text.value);
+      if (!iso) { hide(); return; }
+      try {
+        const r = await fetch(`/sun-sign?date=${iso}`);
+        const data = await r.json();
+        if (my !== seq) return;  // a newer date was entered meanwhile
+        if (!data.sign) { hide(); return; }
+        badge.textContent = data.symbol + String.fromCharCode(0xFE0E);  // text glyph, not emoji
+        badge.title = data.sign;
+        badge.setAttribute('aria-label', `Sun sign: ${data.sign}`);
+        badge.hidden = false;
+        text.classList.add('has-sign');
+      } catch (err) { if (my === seq) hide(); }
+    }
+    text.addEventListener('input', update);
+    document.getElementById(textId + '_picker').addEventListener('change', update);
+    return update;
+  }
+
+  const updateSign = wireSignBadge('dob');
+
   // ── Defaults: now + current location ──────────────────────────────────────
   const pad = n => String(n).padStart(2, '0');
   const now = new Date();
@@ -455,6 +496,7 @@
   dob.setFullYear(now.getFullYear() - 30);
   $('dob').value = `${pad(dob.getDate())}/${pad(dob.getMonth() + 1)}/${dob.getFullYear()}`;
   $('dob_picker').value = `${dob.getFullYear()}-${pad(dob.getMonth() + 1)}-${pad(dob.getDate())}`;
+  updateSign();
   useCurrentLocation(true);
 </script>
 </body>

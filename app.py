@@ -209,6 +209,16 @@ def reverse_geocode():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/sun-sign")
+def sun_sign_lookup():
+    try:
+        date_obj = datetime.strptime(request.args.get("date", ""), "%Y-%m-%d").date()
+    except ValueError:
+        return jsonify({"error": "Invalid date"}), 400
+    sign = sun_sign_on(date_obj)
+    return jsonify({"sign": sign, "symbol": ZODIAC_SYMBOLS[sign]})
+
+
 @app.route("/timezone")
 def get_timezone():
     try:

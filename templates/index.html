@@ -114,6 +114,17 @@
     /* dd/mm/yyyy text field with a native calendar-picker trigger overlaid on the icon */
     .date-field { position: relative; }
     .date-field input[type="text"] { padding-right: 2.4rem; }
+    .date-field input[type="text"].has-sign { padding-right: 4.4rem; }
+    .sign-badge {
+      position: absolute;
+      right: 2.6rem;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.15rem;
+      color: var(--accent2);
+      cursor: default;
+      user-select: none;
+    }
     .date-icon {
       position: absolute;
       right: 0.85rem;
@@ -315,6 +326,7 @@
         <label for="birth_date">Birth Date</label>
         <div class="date-field">
           <input type="text" id="birth_date" placeholder="dd/mm/yyyy" inputmode="numeric" required />
+          <span class="sign-badge" role="img" hidden></span>
           <span class="date-icon" aria-hidden="true">&#128197;</span>
           <input type="date" id="birth_date_picker" class="date-picker-trigger" tabindex="-1" aria-label="Pick birth date" />
         </div>
@@ -642,6 +654,35 @@
   wireDatePicker('birth_date', 'birth_date_picker');
   wireDatePicker('progression_date', 'progression_date_picker');
 
+  // ── Sun-sign badge for birthday fields ─────────────────────────────────────
+  function wireSignBadge(textId) {
+    const text  = document.getElementById(textId);
+    const badge = text.closest('.date-field').querySelector('.sign-badge');
+    let seq = 0;
+    const hide = () => { badge.hidden = true; text.classList.remove('has-sign'); };
+    async function update() {
+      const my = ++seq;
+      const iso = dmyToIso(text.value);
+      if (!iso) { hide(); return; }
+      try {
+        const r = await fetch(`/sun-sign?date=${iso}`);
+        const data = await r.json();
+        if (my !== seq) return;  // a newer date was entered meanwhile
+        if (!data.sign) { hide(); return; }
+        badge.textContent = data.symbol + String.fromCharCode(0xFE0E);  // text glyph, not emoji
+        badge.title = data.sign;
+        badge.setAttribute('aria-label', `Sun sign: ${data.sign}`);
+        badge.hidden = false;
+        text.classList.add('has-sign');
+      } catch (err) { if (my === seq) hide(); }
+    }
+    text.addEventListener('input', update);
+    document.getElementById(textId + '_picker').addEventListener('change', update);
+    return update;
+  }
+
+  const updateSign = wireSignBadge('birth_date');
+
   // ── Defaults: today's date, current location ───────────────────────────────
   function setDefaultDate(textId, pickerId, date) {
     const d  = String(date.getDate()).padStart(2, '0');
@@ -654,6 +695,7 @@
   const today = new Date();
   setDefaultDate('birth_date', 'birth_date_picker', today);
   setDefaultDate('progression_date', 'progression_date_picker', today);
+  updateSign();
 
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(async (pos) => {
