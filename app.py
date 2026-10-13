@@ -138,6 +138,40 @@ def sun_sign_on(date_obj):
     return sign
 
 
+# ── Secondary Progression ────────────────────────────────────────────────────
+def secondary_progression(lat, lon, birth_naive, target_naive):
+    """
+    Secondary progression (day-for-a-year): each tropical year of life after birth equals one day
+    of ephemeris time after birth. Returns the progressed Moon's sign and degree for target_naive.
+    birth_naive and target_naive are local times at the birth location.
+    """
+    local_tz = resolve_timezone(lat, lon)
+    birth_local = localize(local_tz, birth_naive)
+    birth_utc = birth_local.astimezone(pytz.utc)
+    target_utc = localize(local_tz, target_naive).astimezone(pytz.utc)
+
+    elapsed_days = (target_utc - birth_utc).total_seconds() / 86400.0
+    if elapsed_days < 0:
+        raise ValueError("Progression date must be after birth date")
+
+    age_years = elapsed_days / TROPICAL_YEAR_DAYS
+    progressed_utc = birth_utc + timedelta(days=age_years)
+    lon_deg = ecliptic_longitude(ephem.Moon, to_ephem_date(progressed_utc))
+    sign, deg, mins, secs = longitude_to_zodiac(lon_deg)
+    return {
+        "timezone": local_tz.zone,
+        "birth_local": birth_local,
+        "birth_utc": birth_utc,
+        "age_years": age_years,
+        "progressed_utc": progressed_utc,
+        "longitude": lon_deg,
+        "sign": sign,
+        "degrees": deg,
+        "minutes": mins,
+        "seconds": secs,
+    }
+
+
 def get_engine():
     db_url = os.environ.get("ASTRO_DB_URL")
     if not db_url:
@@ -301,6 +335,60 @@ def moon_transit_calculate():
             "sun_sign": sun_sign,
             "sun_sign_symbol": ZODIAC_SYMBOLS.get(sun_sign, ""),
             "periods": rows,
+        }
+    )
+
+
+@app.route("/secondary-progression")
+def secondary_progression_page():
+    return render_template("secondary_progression.html")
+
+
+@app.route("/secondary-progression/calculate", methods=["POST"])
+def secondary_progression_calculate():
+    data = request.get_json() or {}
+
+    required = ["lat", "lon", "birth_date", "birth_time", "progression_date"]
+    missing = [f for f in required if f not in data or str(data[f]).strip() == ""]
+    if missing:
+        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+
+    try:
+        lat = float(data["lat"])
+        lon = float(data["lon"])
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid coordinates"}), 400
+
+    prog_time_str = data.get("progression_time", "12:00") or "12:00"
+    try:
+        birth_naive = datetime.strptime(f"{data['birth_date']} {data['birth_time']}", "%Y-%m-%d %H:%M")
+        target_naive = datetime.strptime(f"{data['progression_date']} {prog_time_str}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        return jsonify({"error": "Invalid date or time"}), 400
+
+    try:
+        p = secondary_progression(lat, lon, birth_naive, target_naive)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    return jsonify(
+        {
+            "timezone": p["timezone"],
+            "birth_local": p["birth_local"].strftime("%Y-%m-%d %H:%M %Z"),
+            "birth_utc": p["birth_utc"].strftime("%Y-%m-%d %H:%M UTC"),
+            "progression_date": data["progression_date"],
+            "age_years": round(p["age_years"], 4),
+            "progressed_chart_date_utc": p["progressed_utc"].strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "moon": {
+                "planet": "Moon",
+                "symbol": PLANET_SYMBOLS["Moon"],
+                "longitude": round(p["longitude"], 4),
+                "sign": p["sign"],
+                "sign_symbol": ZODIAC_SYMBOLS[p["sign"]],
+                "degrees": p["degrees"],
+                "minutes": p["minutes"],
+                "seconds": p["seconds"],
+            },
         }
     )
 
@@ -522,6 +610,44 @@ def tertiary2_forecast():
             "sign": sign_name,
             "degree": degree,
             "tertiary": row.tertiary,
+            "forecast_text": row.forecast_text,
+        }
+    )
+
+
+@app.route("/forecast/secondary")
+def secondary_forecast():
+    sign_name, sign_id, degree = parse_sign_degree(request.args)
+    if sign_name is None:
+        return degree  # (response, status) error tuple
+
+    engine = get_engine()
+    if engine is None:
+        return jsonify({"error": "ASTRO_DB_URL environment variable is not set."}), 500
+
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(
+                    """
+                    SELECT t.forecast_text
+                    FROM tbl_secondary_progression_forecasts f
+                    JOIN tbl_secondary_progression_forecasts_texts t ON t.forecast_id = f.forecast_id
+                    WHERE f.sign_id = :sign_id AND f.degree = :degree
+                    """
+                ),
+                {"sign_id": sign_id, "degree": degree},
+            ).fetchone()
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    if row is None or not row.forecast_text:
+        return jsonify({"error": "No forecast found for this sign and degree."}), 404
+
+    return jsonify(
+        {
+            "sign": sign_name,
+            "degree": degree,
             "forecast_text": row.forecast_text,
         }
     )

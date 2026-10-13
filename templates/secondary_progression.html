@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Secondary Progression</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d1a;
+      --surface: #13132b;
+      --surface2: #1a1a38;
+      --border: #2e2e5e;
+      --accent: #7c6fcd;
+      --accent2: #8bd7fa;
+      --text: #e2e0ff;
+      --muted: #8884aa;
+      --gold: #f0c060;
+      --success: #4ade80;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent2);
+      margin-bottom: 0.3rem;
+      letter-spacing: 0.04em;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+
+    .nav-row { max-width: 720px; margin: -1rem auto 1.5rem; text-align: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; }
+    .nav-btn {
+      display: inline-block;
+      padding: 0.55rem 1.2rem;
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      color: var(--accent2);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .nav-btn:hover { background: rgba(124,111,205,0.18); }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      max-width: 720px;
+      margin: 0 auto 2rem;
+    }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent2);
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+
+    @media (max-width: 540px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    .field { display: flex; flex-direction: column; gap: 0.35rem; }
+
+    label {
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    input[type="date"],
+    input[type="time"],
+    input[type="text"] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 0.6rem 0.85rem;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+      width: 100%;
+      color-scheme: dark;
+    }
+
+    input:focus { border-color: var(--accent); }
+
+    /* dd/mm/yyyy text field with a native calendar-picker trigger overlaid on the icon */
+    .date-field { position: relative; }
+    .date-field input[type="text"] { padding-right: 2.4rem; }
+    .date-field input[type="text"].has-sign { padding-right: 4.4rem; }
+    .sign-badge {
+      position: absolute;
+      right: 2.6rem;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.15rem;
+      color: var(--accent2);
+      cursor: default;
+      user-select: none;
+    }
+    .date-icon {
+      position: absolute;
+      right: 0.85rem;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1rem;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+    input.date-picker-trigger {
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 0;
+      height: 0;
+      opacity: 0;
+      pointer-events: none;
+      padding: 0;
+      border: none;
+    }
+
+    /* Autocomplete */
+    .autocomplete-wrap { position: relative; }
+
+    .autocomplete-drop {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0; right: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      z-index: 100;
+      max-height: 220px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .autocomplete-drop.open { display: block; }
+
+    .ac-item {
+      padding: 0.6rem 0.9rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      line-height: 1.4;
+      color: var(--text);
+      transition: background 0.15s;
+    }
+
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover, .ac-item.active { background: var(--border); }
+
+    .tz-badge {
+      font-size: 0.78rem;
+      color: var(--accent2);
+      background: rgba(124,111,205,0.15);
+      padding: 0.25rem 0.6rem;
+      border-radius: 20px;
+      display: inline-block;
+      margin-top: 0.4rem;
+    }
+
+    button[type="submit"] {
+      display: block;
+      width: 100%;
+      margin-top: 1.5rem;
+      padding: 0.85rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    button[type="submit"]:hover { background: var(--accent2); transform: translateY(-1px); }
+    button[type="submit"]:active { transform: translateY(0); }
+    button[type="submit"]:disabled { background: var(--border); cursor: not-allowed; transform: none; }
+
+    /* Results */
+    #results { display: none; max-width: 720px; margin: 0 auto; }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .meta-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+    }
+
+    .meta-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.2rem; }
+    .meta-value { font-size: 0.9rem; color: var(--gold); font-weight: 600; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      background: var(--surface2);
+      padding: 0.65rem 0.9rem;
+      text-align: left;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      border-bottom: 2px solid var(--border);
+    }
+
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+    tbody tr:hover { background: var(--surface2); }
+    tbody tr:last-child { border-bottom: none; }
+
+    td { padding: 0.75rem 0.9rem; font-size: 0.92rem; vertical-align: middle; }
+
+    .planet-cell { display: flex; align-items: center; gap: 0.5rem; }
+    .planet-sym { font-size: 1.3rem; width: 1.6rem; text-align: center; }
+    .planet-name { font-weight: 600; }
+
+    .sign-cell { display: flex; align-items: center; gap: 0.4rem; }
+    .sign-sym { font-size: 1.2rem; }
+
+    .deg-cell { font-family: 'Courier New', monospace; color: var(--accent2); font-size: 0.9rem; }
+
+    .lon-cell { font-family: 'Courier New', monospace; font-size: 0.82rem; color: var(--muted); }
+
+    #error-msg {
+      display: none;
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.4);
+      border-radius: 8px;
+      color: #fca5a5;
+      padding: 0.75rem 1rem;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .spinner {
+      display: none;
+      text-align: center;
+      padding: 1rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .spinner.show { display: block; }
+
+    .progressed-highlight {
+      background: rgba(124,111,205,0.1);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      margin-bottom: 1rem;
+      font-size: 0.88rem;
+    }
+
+    .progressed-highlight strong { color: var(--accent2); }
+
+    .forecast-panel {
+      display: none;
+      background: var(--surface2);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 0.9rem 1.1rem;
+      margin-top: 1rem;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .forecast-panel .forecast-title { color: var(--accent2); font-weight: 600; margin-bottom: 0.4rem; }
+  </style>
+</head>
+<body>
+
+<h1>☽ Secondary Progression</h1>
+<p class="subtitle">One day after birth = one year of life &nbsp;·&nbsp; Progressed Moon sign and degree</p>
+<div class="nav-row"><a class="nav-btn" href="/">&#8592; Tertiary Progressions</a></div>
+
+<div class="card">
+  <form id="calc-form" autocomplete="off">
+
+    <!-- Birth section -->
+    <p class="section-title">Birth Data</p>
+    <div class="grid-3" style="margin-bottom:1rem;">
+      <div class="field">
+        <label for="birth_date">Birth Date</label>
+        <div class="date-field">
+          <input type="text" id="birth_date" placeholder="dd/mm/yyyy" inputmode="numeric" required />
+          <span class="sign-badge" role="img" hidden></span>
+          <span class="date-icon" aria-hidden="true">&#128197;</span>
+          <input type="date" id="birth_date_picker" class="date-picker-trigger" tabindex="-1" aria-label="Pick birth date" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="birth_time">Birth Time (local)</label>
+        <input type="time" id="birth_time" value="12:00" required />
+      </div>
+      <div class="field">
+        <label>Place of Birth</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="place_input" placeholder="Start typing a city…" required />
+          <div class="autocomplete-drop" id="place_drop"></div>
+        </div>
+        <span class="tz-badge" id="tz-display" style="display:none;"></span>
+        <span class="tz-badge" id="coords-display" style="display:none;font-size:0.72rem;color:var(--muted);background:rgba(255,255,255,0.05);"></span>
+      </div>
+    </div>
+
+    <!-- Hidden coords -->
+    <input type="hidden" id="lat" />
+    <input type="hidden" id="lon" />
+
+    <!-- Progression section -->
+    <p class="section-title" style="margin-top:1.2rem;">Progression Date</p>
+    <div class="grid-2">
+      <div class="field">
+        <label for="progression_date">Progression Date</label>
+        <div class="date-field">
+          <input type="text" id="progression_date" placeholder="dd/mm/yyyy" inputmode="numeric" required />
+          <span class="date-icon" aria-hidden="true">&#128197;</span>
+          <input type="date" id="progression_date_picker" class="date-picker-trigger" tabindex="-1" aria-label="Pick progression date" />
+        </div>
+      </div>
+    </div>
+
+    <div id="error-msg"></div>
+    <button type="submit" id="submit-btn">Calculate Secondary Progression</button>
+  </form>
+</div>
+
+<div class="spinner" id="spinner">⟳ Calculating planetary positions…</div>
+
+<div id="results">
+  <div class="card">
+    <p class="section-title">Calculation Summary</p>
+    <div class="meta-grid" id="meta-grid"></div>
+  </div>
+
+  <div class="card">
+    <p class="section-title">Secondary Progression — Progressed Moon</p>
+    <div class="progressed-highlight" id="sp-label"></div>
+    <table>
+      <thead>
+        <tr><th>Planet</th><th>Sign</th><th>Position</th><th>Longitude</th></tr>
+      </thead>
+      <tbody id="sp-tbody"></tbody>
+    </table>
+    <div class="forecast-panel" id="sp-forecast"></div>
+  </div>
+</div>
+
+<script>
+  // ── Autocomplete ──────────────────────────────────────────────────────────
+  let acTimer = null;
+  let selectedPlace = null;
+
+  const placeInput    = document.getElementById('place_input');
+  const placeDrop     = document.getElementById('place_drop');
+  const tzDisplay     = document.getElementById('tz-display');
+  const coordsDisplay = document.getElementById('coords-display');
+
+  placeInput.addEventListener('input', () => {
+    clearTimeout(acTimer);
+    const q = placeInput.value.trim();
+    if (q.length < 2) { closeDrop(); return; }
+    acTimer = setTimeout(() => fetchPlaces(q), 320);
+  });
+
+  placeInput.addEventListener('blur', () => setTimeout(closeDrop, 180));
+
+  async function fetchPlaces(q) {
+    try {
+      const r = await fetch(`/geocode?q=${encodeURIComponent(q)}`);
+      const items = await r.json();
+      renderDrop(items);
+    } catch (err) { closeDrop(); }
+  }
+
+  function renderDrop(items) {
+    if (!items.length) { closeDrop(); return; }
+    placeDrop.innerHTML = '';
+    items.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'ac-item';
+      div.textContent = item.name;
+      div.addEventListener('mousedown', () => selectPlace(item));
+      placeDrop.appendChild(div);
+    });
+    placeDrop.classList.add('open');
+  }
+
+  function closeDrop() { placeDrop.classList.remove('open'); }
+
+  async function selectPlace(item) {
+    placeInput.value = item.name;
+    document.getElementById('lat').value = item.lat;
+    document.getElementById('lon').value = item.lon;
+    selectedPlace = item;
+    closeDrop();
+
+    // Fetch timezone
+    coordsDisplay.textContent = `lat ${item.lat.toFixed(4)}  lon ${item.lon.toFixed(4)}`;
+    coordsDisplay.style.display = 'inline-block';
+    try {
+      const r = await fetch(`/timezone?lat=${item.lat}&lon=${item.lon}`);
+      const data = await r.json();
+      if (data.timezone) {
+        tzDisplay.textContent = `⏱ ${data.timezone}`;
+        tzDisplay.style.display = 'inline-block';
+      }
+    } catch (err) { tzDisplay.style.display = 'none'; }
+  }
+
+  // ── Form submit ───────────────────────────────────────────────────────────
+  document.getElementById('calc-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideError();
+
+    const lat = document.getElementById('lat').value;
+    const lon = document.getElementById('lon').value;
+    if (!lat || !lon) { showError('Please select a place from the autocomplete list.'); return; }
+
+    const birthDateIso = dmyToIso(document.getElementById('birth_date').value);
+    const progressionDateIso = dmyToIso(document.getElementById('progression_date').value);
+    if (!birthDateIso || !progressionDateIso) { showError('Please enter dates as dd/mm/yyyy.'); return; }
+
+    const payload = {
+      lat: parseFloat(lat),
+      lon: parseFloat(lon),
+      birth_date: birthDateIso,
+      birth_time: document.getElementById('birth_time').value,
+      progression_date: progressionDateIso,
+    };
+
+    document.getElementById('submit-btn').disabled = true;
+    document.getElementById('spinner').classList.add('show');
+    document.getElementById('results').style.display = 'none';
+
+    try {
+      const r = await fetch('/secondary-progression/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok) { showError(data.error || 'Calculation failed.'); return; }
+      renderResults(data);
+    } catch (err) {
+      showError('Network error: ' + err.message);
+    } finally {
+      document.getElementById('submit-btn').disabled = false;
+      document.getElementById('spinner').classList.remove('show');
+    }
+  });
+
+  function buildPlanetRows(planets, tbodyId) {
+    const tbody = document.getElementById(tbodyId);
+    tbody.innerHTML = '';
+    planets.forEach(p => {
+      const tr = document.createElement('tr');
+      if (p.error) {
+        tr.innerHTML = `
+          <td><div class="planet-cell">
+            <span class="planet-sym">${p.symbol || ''}</span>
+            <span class="planet-name">${p.planet}</span>
+          </div></td>
+          <td colspan="3" style="color:#fca5a5;">Error: ${p.error}</td>`;
+      } else {
+        tr.innerHTML = `
+          <td><div class="planet-cell">
+            <span class="planet-sym">${p.symbol}</span>
+            <span class="planet-name">${p.planet}</span>
+          </div></td>
+          <td><div class="sign-cell">
+            <span class="sign-sym">${p.sign_symbol}</span>
+            <span>${p.sign}</span>
+          </div></td>
+          <td class="deg-cell">${p.degrees}° ${String(p.minutes).padStart(2,'0')}' ${String(p.seconds).padStart(2,'0')}"</td>
+          <td class="lon-cell">${p.longitude.toFixed(4)}°</td>`;
+      }
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderResults(data) {
+    const metas = [
+      ['Timezone', data.timezone],
+      ['Birth (local)', data.birth_local],
+      ['Birth (UTC)', data.birth_utc],
+      ['Progression Date', data.progression_date],
+      ['Age', data.age_years.toLocaleString() + ' years'],
+    ];
+    document.getElementById('meta-grid').innerHTML = metas.map(([l, v]) =>
+      `<div class="meta-item"><div class="meta-label">${l}</div><div class="meta-value">${v}</div></div>`
+    ).join('');
+
+    const m = data.moon;
+    document.getElementById('sp-label').innerHTML =
+      `Progressed Moon: <strong>${m.degrees}° ${m.sign}</strong>` +
+      ` &nbsp;·&nbsp; progressed chart ${data.progressed_chart_date_utc} (${data.age_years} days after birth)`;
+    buildPlanetRows([m], 'sp-tbody');
+    loadForecast(m);
+
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ── Secondary progression forecast lookup ─────────────────────────────────
+  let forecastSeq = 0;
+
+  async function loadForecast(m) {
+    const my = ++forecastSeq;
+    const panel = document.getElementById('sp-forecast');
+    panel.style.display = 'block';
+    panel.textContent = 'Loading forecast…';
+    try {
+      const r = await fetch(`/forecast/secondary?sign=${encodeURIComponent(m.sign)}&degree=${m.degrees}`);
+      const data = r.headers.get('content-type')?.includes('json')
+        ? await r.json() : { error: `Server returned HTTP ${r.status}` };
+      if (my !== forecastSeq) return;  // a newer calculation started meanwhile
+      if (!r.ok) {
+        panel.innerHTML = `<span style="color:#fca5a5;"></span>`;
+        panel.firstChild.textContent = data.error || 'No forecast available.';
+        return;
+      }
+      panel.innerHTML = `
+        <div class="forecast-title">${data.sign} ${data.degree}° &mdash; Secondary Progression</div>
+        <div dir="auto"></div>`;
+      panel.querySelector('[dir="auto"]').textContent = data.forecast_text;
+    } catch (err) {
+      if (my === forecastSeq) panel.textContent = 'Network error: ' + err.message;
+    }
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function hideError() {
+    document.getElementById('error-msg').style.display = 'none';
+  }
+
+  // ── dd/mm/yyyy date fields ──────────────────────────────────────────────────
+  function autoFormatDate(input) {
+    input.addEventListener('input', function () {
+      const digits = this.value.replace(/\D/g, '').slice(0, 8);
+      let v = digits;
+      if (digits.length > 4)      v = digits.slice(0,2) + '/' + digits.slice(2,4) + '/' + digits.slice(4);
+      else if (digits.length > 2) v = digits.slice(0,2) + '/' + digits.slice(2);
+      this.value = v;
+    });
+  }
+
+  function dmyToIso(str) {
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(str.trim());
+    if (!m) return null;
+    const [, d, mo, y] = m;
+    return `${y}-${mo}-${d}`;
+  }
+
+  function wireDatePicker(textId, pickerId) {
+    const text = document.getElementById(textId);
+    const picker = document.getElementById(pickerId);
+    autoFormatDate(text);
+    const icon = text.closest('.date-field').querySelector('.date-icon');
+    icon.addEventListener('click', () => {
+      try { picker.showPicker(); } catch(e) { picker.focus(); }
+    });
+    picker.addEventListener('change', () => {
+      if (!picker.value) return;
+      const [y, mo, d] = picker.value.split('-');
+      text.value = `${d}/${mo}/${y}`;
+    });
+  }
+
+  wireDatePicker('birth_date', 'birth_date_picker');
+  wireDatePicker('progression_date', 'progression_date_picker');
+
+  // ── Sun-sign badge for birthday fields ─────────────────────────────────────
+  function wireSignBadge(textId) {
+    const text  = document.getElementById(textId);
+    const badge = text.closest('.date-field').querySelector('.sign-badge');
+    let seq = 0;
+    const hide = () => { badge.hidden = true; text.classList.remove('has-sign'); };
+    async function update() {
+      const my = ++seq;
+      const iso = dmyToIso(text.value);
+      if (!iso) { hide(); return; }
+      try {
+        const r = await fetch(`/sun-sign?date=${iso}`);
+        const data = await r.json();
+        if (my !== seq) return;  // a newer date was entered meanwhile
+        if (!data.sign) { hide(); return; }
+        badge.textContent = data.symbol + String.fromCharCode(0xFE0E);  // text glyph, not emoji
+        badge.title = data.sign;
+        badge.setAttribute('aria-label', `Sun sign: ${data.sign}`);
+        badge.hidden = false;
+        text.classList.add('has-sign');
+      } catch (err) { if (my === seq) hide(); }
+    }
+    text.addEventListener('input', update);
+    document.getElementById(textId + '_picker').addEventListener('change', update);
+    return update;
+  }
+
+  const updateSign = wireSignBadge('birth_date');
+
+  // ── Defaults: today's date, current location ───────────────────────────────
+  function setDefaultDate(textId, pickerId, date) {
+    const d  = String(date.getDate()).padStart(2, '0');
+    const mo = String(date.getMonth() + 1).padStart(2, '0');
+    const y  = date.getFullYear();
+    document.getElementById(textId).value = `${d}/${mo}/${y}`;
+    document.getElementById(pickerId).value = `${y}-${mo}-${d}`;
+  }
+
+  const today = new Date();
+  setDefaultDate('birth_date', 'birth_date_picker', today);
+  setDefaultDate('progression_date', 'progression_date_picker', today);
+  updateSign();
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      if (placeInput.value.trim()) return;  // user already started typing
+      try {
+        const { latitude, longitude } = pos.coords;
+        const r = await fetch(`/reverse-geocode?lat=${latitude}&lon=${longitude}`);
+        const item = await r.json();
+        if (item.error || placeInput.value.trim()) return;
+        selectPlace(item);
+      } catch (err) { /* leave the field empty */ }
+    }, () => { /* permission denied or unavailable: leave the field empty */ },
+    { timeout: 10000, maximumAge: 600000 });
+  }
+</script>
+</body>
+</html>

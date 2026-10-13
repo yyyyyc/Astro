@@ -1,103 +1,45 @@
--- Table tbl_signs - contains all the signs
+public.tbl_signs
+  id        bigint       NOT NULL PRIMARY KEY
+  sign_id   smallint     NOT NULL UNIQUE CHECK (sign_id BETWEEN 1 AND 12)
+  sign_name varchar      NOT NULL
 
-schema:
+public.tbl_secondary_progression_forecasts
+  id          bigint     NOT NULL PRIMARY KEY
+  sign_id     smallint   NULL CHECK (sign_id BETWEEN 1 AND 12)
+  degree      smallint   NULL CHECK (degree BETWEEN 0 AND 29)
+  forecast_id integer    NULL
 
-        create table public.tbl_signs (
-        id bigserial not null,
-        sign_id smallint not null,
-        sign_name character varying(50) not null,
-        constraint tblsigns_pkey primary key (id),
-        constraint uq_tbl_signs_sign_id unique (sign_id),
-        constraint tblsigns_sign_id_check check (
-            (
-            (sign_id >= 1)
-            and (sign_id <= 12)
-            )
-        )
-        ) TABLESPACE pg_default;
+public.tbl_secondary_progression_forecasts_texts
+  forecast_id   integer  NOT NULL PRIMARY KEY
+  forecast_text text     NULL
 
-data:
-INSERT INTO "public"."tbl_signs" ("id", "sign_id", "sign_name") VALUES (1, 1, 'Aries'), (2, 2, 'Taurus'), (3, 3, 'Gemini'), (4, 4, 'Cancer'), (5, 5, 'Leo'), (6, 6, 'Virgo'), (7, 7, 'Libra'), (8, 8, 'Scorpio'), (9, 9, 'Sagittarius'), (10, 10, 'Capricorn'), (11, 11, 'Aquarius'), (12, 12, 'Pisces');
+public.tbl_tertiary1_forecasts
+  id          bigint     NOT NULL PRIMARY KEY
+  sign_id     smallint   NOT NULL CHECK (sign_id BETWEEN 1 AND 12)
+  degree      smallint   NOT NULL CHECK (degree BETWEEN 0 AND 29)
+  forecast_id integer    NOT NULL
 
+public.tbl_tertiary1_forecasts_texts
+  forecast_id   integer  NOT NULL PRIMARY KEY
+  forecast_text text     NOT NULL
 
+public.tbl_tertiary2_forecasts
+  id          bigint     NOT NULL PRIMARY KEY
+  sign_id     smallint   NOT NULL CHECK (sign_id BETWEEN 1 AND 12)
+  tertiary    smallint   NOT NULL CHECK (tertiary BETWEEN 1 AND 3)
+  degree      smallint   NOT NULL CHECK (degree BETWEEN 0 AND 29)
+  forecast_id integer    NOT NULL
 
--- Table tbl_tertiary1_forecasts - gets all tertiary I forecasts retrieved by   sign_id, and degree 
+public.tbl_tertiary2_forecasts_texts
+  forecast_id   integer  NOT NULL PRIMARY KEY
+  forecast_text text     NOT NULL
 
-create table public.tbl_tertiary1_forecasts (
-  id bigserial not null,
-  sign_id smallint not null,
-  degree smallint not null,
-  forecast_id integer not null,
-  constraint tbltertiary1texts_pkey primary key (id),
-  constraint fk_tbl_tertiary1_forecasts_forecast foreign KEY (forecast_id) references tbl_tertiary1_forecasts_texts (forecast_id),
-  constraint fk_tbl_tertiary1_forecasts_tbl_signs foreign KEY (sign_id) references tbl_signs (sign_id),
-  constraint tbltertiary1texts_degree_check check (
-    (
-      (degree >= 0)
-      and (degree <= 29)
-    )
-  ),
-  constraint tbltertiary1texts_sign_id_check check (
-    (
-      (sign_id >= 1)
-      and (sign_id <= 12)
-    )
-  )
-) TABLESPACE pg_default;
+public.tbl_moon_of_transit_daily_forecasts
+  id             bigint  NOT NULL PRIMARY KEY
+  moon_location  integer NOT NULL CHECK (moon_location BETWEEN 1 AND 12)
+  forecast_group integer NOT NULL CHECK (forecast_group BETWEEN 1 AND 10)
+  forecast_id    integer NOT NULL UNIQUE
 
-
-
--- Table tbl_tertiary1_forecasts_texts - contains all tertiary 1 forecasts texts and ids
-
-create table public.tbl_tertiary1_forecasts_texts (
-  forecast_id integer not null,
-  forecast_text text not null,
-  constraint pk_tbl_tertiary1_forecasts_texts primary key (forecast_id),
-  constraint tbl_tertiary1_forecast_texts_forecast_id_key unique (forecast_id),
-  constraint uq_tbl_tertiary1_forecast_texts_forecast_id unique (forecast_id)
-) TABLESPACE pg_default;
-
-
-
--- Table tbl_tertiary2_forecasts - gets all tertiary 2 forecasts retrieved by   sign_id and tertiary (or sign_id and degree)  
-
-create table public.tbl_tertiary2_forecasts (
-  id bigserial not null,
-  sign_id smallint not null,
-  tertiary smallint not null,
-  degree smallint not null,
-  forecast_id integer not null,
-  constraint tbltertiary2texts_pkey primary key (id),
-  constraint fk_tbl_tertiary2_forecasts_forecast foreign KEY (forecast_id) references tbl_tertiary2_forecasts_texts (forecast_id),
-  constraint fk_tbl_tertiary2_forecasts_tbl_signs foreign KEY (sign_id) references tbl_signs (sign_id),
-  constraint tbltertiary2texts_degree_check check (
-    (
-      (degree >= 0)
-      and (degree <= 29)
-    )
-  ),
-  constraint tbltertiary2texts_sign_id_check check (
-    (
-      (sign_id >= 1)
-      and (sign_id <= 12)
-    )
-  ),
-  constraint tbltertiary2texts_tertiary_check check (
-    (
-      (tertiary >= 1)
-      and (tertiary <= 3)
-    )
-  )
-) TABLESPACE pg_default;
-
-
-
--- Table tbl_tertiary2_forecasts_texts - contains all tertiary 2 forecasts texts and ids
-create table public.tbl_tertiary2_forecasts_texts (
-  forecast_id integer not null,
-  forecast_text text not null,
-  constraint pk_tbl_tertiary2_forecasts_texts primary key (forecast_id),
-  constraint tbl_tertiary2_forecast_texts_forecast_id_key unique (forecast_id),
-  constraint uq_tbl_tertiary2_forecast_texts_forecast_id unique (forecast_id)
-) TABLESPACE pg_default;
-
+public.tbl_moon_of_transit_daily_forecasts_texts
+  forecast_id   integer  NOT NULL PRIMARY KEY
+  forecast_text text     NULL
