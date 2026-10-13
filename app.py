@@ -102,6 +102,35 @@ def geocode():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/reverse-geocode")
+def reverse_geocode():
+    try:
+        lat = float(request.args.get("lat"))
+        lon = float(request.args.get("lon"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid coordinates"}), 400
+    try:
+        resp = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={"lat": lat, "lon": lon, "format": "json", "zoom": 10, "addressdetails": 1, "accept-language": "en"},
+            headers={"User-Agent": "TertiaryProgressionApp/1.0", "Accept-Language": "en"},
+            timeout=5,
+        )
+        item = resp.json()
+        if "error" in item:
+            return jsonify({"error": item["error"]}), 404
+        addr = item.get("address", {})
+        city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("municipality") or addr.get("county")
+        parts = [p for p in (city, addr.get("state"), addr.get("country")) if p]
+        return jsonify({
+            "name": ", ".join(parts) if parts else item["display_name"],
+            "lat": float(item["lat"]),
+            "lon": float(item["lon"]),
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.route("/timezone")
 def get_timezone():
     try:
