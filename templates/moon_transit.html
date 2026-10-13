@@ -451,6 +451,10 @@
   const now = new Date();
   $('date').value = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
   $('time').value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const dob = new Date(now);
+  dob.setFullYear(now.getFullYear() - 30);
+  $('dob').value = `${pad(dob.getDate())}/${pad(dob.getMonth() + 1)}/${dob.getFullYear()}`;
+  $('dob_picker').value = `${dob.getFullYear()}-${pad(dob.getMonth() + 1)}-${pad(dob.getDate())}`;
   useCurrentLocation(true);
 </script>
 </body>
