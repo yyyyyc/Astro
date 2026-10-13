@@ -6,6 +6,7 @@ import requests
 from timezonefinder import TimezoneFinder
 import pytz
 import os
+import json
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 
@@ -172,6 +173,20 @@ def secondary_progression(lat, lon, birth_naive, target_naive):
     }
 
 
+VERSION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "version.json")
+
+
+def read_version():
+    """Version and release date-time from version.json (bumped by bump_version.py before each push)."""
+    try:
+        with open(VERSION_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        released = datetime.fromisoformat(data["datetime"]).strftime("%d/%m/%Y %H:%M")
+        return {"version": data["version"], "datetime": released}
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 def get_engine():
     db_url = os.environ.get("ASTRO_DB_URL")
     if not db_url:
@@ -185,7 +200,7 @@ def get_engine():
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", app_version=read_version())
 
 
 @app.route("/geocode")

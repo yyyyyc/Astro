@@ -39,3 +39,11 @@ read `docs/database-schema.md`.
 - `app.py` — Flask application and calculation logic
 - `templates/index.html` — main UI
 - `docs/database-schema.md` — Supabase database documentation
+
+## Versioning
+
+The main page shows the version and release date-time from `version.json`.
+
+- Before every `git push`, run `python bump_version.py` (patch bump; `minor`/`major` for larger releases)
+  and commit `version.json` together with the changes being pushed.
+- Never push without bumping the version.
