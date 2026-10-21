@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 import ephem
 import math
 from datetime import datetime, timedelta
@@ -201,6 +201,11 @@ def get_engine():
 @app.route("/")
 def index():
     return render_template("index.html", app_version=read_version())
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return send_from_directory(app.static_folder, "favicon.ico", mimetype="image/vnd.microsoft.icon")
 
 
 @app.route("/geocode")
@@ -732,6 +737,7 @@ def signs():
 <head>
   <meta charset="UTF-8"/>
   <title>Zodiac Signs</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
   <style>
     body {{ font-family: 'Segoe UI', system-ui, sans-serif; background:#0d0d1a; color:#e2e0ff; padding:2rem; }}
     h1 {{ color:#a78bfa; margin-bottom:1.5rem; }}
