@@ -1,0 +1,299 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Astro landing design system (Hebrew / RTL)
+   Tokens → base → components. Pages compose these classes; they should not
+   restyle .ds-* components locally. Field logic lives in ds.js.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ── Tokens ─────────────────────────────────────────────────────────────── */
+:root {
+  /* Colour */
+  --ds-color-bg:          #0b0620;
+  --ds-color-bg-deep:     #05020f;
+  --ds-color-nebula-1:    #3b1d6e;
+  --ds-color-nebula-2:    #1c2a6b;
+  --ds-color-surface:     rgba(28, 18, 62, 0.72);
+  --ds-color-surface-2:   rgba(44, 30, 92, 0.85);
+  --ds-color-border:      rgba(214, 178, 106, 0.28);
+  --ds-color-border-strong: rgba(214, 178, 106, 0.6);
+  --ds-color-text:        #f6f1ff;
+  --ds-color-text-muted:  #c7bde6;   /* 9.6:1 on --ds-color-bg */
+  --ds-color-gold:        #e6c27a;
+  --ds-color-gold-strong: #f5d995;
+  --ds-color-on-gold:     #1a0f33;
+  --ds-color-violet:      #9d7bff;
+  --ds-color-danger:      #ffb4b4;   /* 10:1 on --ds-color-bg */
+  --ds-color-danger-bg:   rgba(255, 99, 99, 0.12);
+  --ds-color-focus:       #ffe7a8;
+
+  /* Type */
+  --ds-font-display: "Frank Ruhl Libre", "David", "Times New Roman", serif;
+  --ds-font-body:    "Assistant", "Segoe UI", "Arial Hebrew", Arial, sans-serif;
+  --ds-font-glyph:   "Segoe UI Symbol", "Noto Sans Symbols", "Apple Symbols", sans-serif;
+  --ds-text-xs:  0.8125rem;
+  --ds-text-sm:  0.9375rem;
+  --ds-text-md:  1.0625rem;
+  --ds-text-lg:  1.25rem;
+  --ds-text-xl:  clamp(1.5rem, 1.2rem + 1.4vw, 2rem);
+  --ds-text-2xl: clamp(1.85rem, 1.4rem + 2.2vw, 2.75rem);
+  --ds-leading:  1.6;
+
+  /* Space (4px grid) */
+  --ds-space-1: 0.25rem;
+  --ds-space-2: 0.5rem;
+  --ds-space-3: 0.75rem;
+  --ds-space-4: 1rem;
+  --ds-space-5: 1.5rem;
+  --ds-space-6: 2rem;
+  --ds-space-7: 3rem;
+
+  /* Shape & depth */
+  --ds-radius-sm: 8px;
+  --ds-radius-md: 14px;
+  --ds-radius-lg: 22px;
+  --ds-radius-pill: 999px;
+  --ds-shadow-card: 0 18px 50px rgba(0, 0, 0, 0.45);
+  --ds-shadow-glow: 0 0 0 1px var(--ds-color-border), 0 0 32px rgba(157, 123, 255, 0.25);
+  --ds-tap-min: 48px;
+
+  /* Motion */
+  --ds-dur-fast: 150ms;
+  --ds-dur-med:  350ms;
+  --ds-dur-slow: 900ms;
+  --ds-ease:     cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html {
+  -webkit-text-size-adjust: 100%;
+  background: var(--ds-color-bg-deep);
+  overflow-x: hidden;   /* rotating artwork must never widen the page */
+  overflow-x: clip;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-x: clip;
+  font-family: var(--ds-font-body);
+  font-size: var(--ds-text-md);
+  line-height: var(--ds-leading);
+  color: var(--ds-color-text);
+  background:
+    radial-gradient(ellipse 80% 55% at 85% 0%, var(--ds-color-nebula-1) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 50% at 0% 100%, var(--ds-color-nebula-2) 0%, transparent 60%),
+    linear-gradient(180deg, var(--ds-color-bg) 0%, var(--ds-color-bg-deep) 100%);
+}
+img, video, svg { display: block; max-width: 100%; }
+[hidden] { display: none !important; }
+
+:focus-visible {
+  outline: 3px solid var(--ds-color-focus);
+  outline-offset: 3px;
+  border-radius: var(--ds-radius-sm);
+}
+
+.ds-visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ── Typography ─────────────────────────────────────────────────────────── */
+.ds-heading {
+  font-family: var(--ds-font-display);
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0;
+  color: var(--ds-color-text);
+}
+.ds-heading--xl { font-size: var(--ds-text-2xl); }
+.ds-heading--lg { font-size: var(--ds-text-xl); }
+.ds-heading--gold {
+  background: linear-gradient(180deg, var(--ds-color-gold-strong), var(--ds-color-gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ds-text { margin: 0; color: var(--ds-color-text-muted); }
+.ds-text--sm { font-size: var(--ds-text-sm); }
+.ds-glyph { font-family: var(--ds-font-glyph); font-variant-emoji: text; }
+
+/* ── Card ───────────────────────────────────────────────────────────────── */
+.ds-card {
+  background: var(--ds-color-surface);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-card);
+  padding: var(--ds-space-5);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+@media (min-width: 600px) { .ds-card { padding: var(--ds-space-6); } }
+
+/* ── Form field ─────────────────────────────────────────────────────────────
+   <div class="ds-field">
+     <label class="ds-field__label" for="x">…</label>
+     <input class="ds-input" id="x" data-ds-rules="required email" aria-describedby="x-hint x-error">
+     <p class="ds-field__hint" id="x-hint">…</p>
+     <p class="ds-field__error" id="x-error"></p>
+   </div>                                                                      */
+.ds-form { display: flex; flex-direction: column; gap: var(--ds-space-4); }
+.ds-field { display: flex; flex-direction: column; gap: var(--ds-space-2); text-align: start; }
+.ds-field__label {
+  font-weight: 600;
+  font-size: var(--ds-text-md);
+  color: var(--ds-color-text);
+}
+.ds-field__hint { margin: 0; font-size: var(--ds-text-xs); color: var(--ds-color-text-muted); }
+.ds-field__error {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  color: var(--ds-color-danger);
+}
+.ds-field__error:empty { display: none; }
+.ds-field__error::before { content: "⚠ "; }
+
+.ds-input {
+  width: 100%;
+  min-height: var(--ds-tap-min);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  font: inherit;
+  font-size: max(16px, var(--ds-text-md));   /* ≥16px stops iOS zoom on focus */
+  color: var(--ds-color-text);
+  background: var(--ds-color-surface-2);
+  border: 1.5px solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-md);
+  transition: border-color var(--ds-dur-fast), box-shadow var(--ds-dur-fast);
+  color-scheme: dark;
+}
+.ds-input::placeholder { color: var(--ds-color-text-muted); opacity: 0.75; }
+.ds-input:hover { border-color: var(--ds-color-gold); }
+.ds-input:focus-visible {
+  outline: none;
+  border-color: var(--ds-color-gold-strong);
+  box-shadow: 0 0 0 3px rgba(245, 217, 149, 0.35);
+}
+.ds-input[aria-invalid="true"] {
+  border-color: var(--ds-color-danger);
+  background: var(--ds-color-danger-bg);
+}
+/* Numbers, dates and e-mail addresses read left-to-right inside the RTL page */
+.ds-input--ltr { direction: ltr; text-align: right; }
+.ds-input--ltr:placeholder-shown { text-align: right; }
+
+.ds-form__error {
+  margin: 0;
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border: 1px solid var(--ds-color-danger);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-danger-bg);
+  color: var(--ds-color-danger);
+  font-weight: 600;
+}
+.ds-form__error:empty { display: none; }
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.ds-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-2);
+  min-height: var(--ds-tap-min);
+  padding: var(--ds-space-3) var(--ds-space-5);
+  font: inherit;
+  font-weight: 700;
+  font-size: var(--ds-text-md);
+  border-radius: var(--ds-radius-pill);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform var(--ds-dur-fast), box-shadow var(--ds-dur-fast), background var(--ds-dur-fast);
+}
+.ds-btn--primary {
+  color: var(--ds-color-on-gold);
+  background: linear-gradient(180deg, var(--ds-color-gold-strong), var(--ds-color-gold));
+  box-shadow: 0 6px 22px rgba(230, 194, 122, 0.35);
+}
+.ds-btn--primary:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(230, 194, 122, 0.5); }
+.ds-btn--ghost {
+  color: var(--ds-color-gold-strong);
+  background: rgba(10, 5, 30, 0.55);
+  border-color: var(--ds-color-border-strong);
+}
+.ds-btn--ghost:hover { background: rgba(230, 194, 122, 0.12); }
+.ds-btn--block { width: 100%; }
+.ds-btn--sm { min-height: 44px; padding: var(--ds-space-2) var(--ds-space-4); font-size: var(--ds-text-sm); }
+.ds-btn[aria-busy="true"], .ds-btn:disabled { opacity: 0.7; cursor: progress; transform: none; }
+.ds-btn[aria-busy="true"]::after {
+  content: "";
+  width: 1em; height: 1em;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  animation: ds-spin 0.8s linear infinite;
+}
+
+/* ── Dialog ─────────────────────────────────────────────────────────────── */
+.ds-dialog {
+  width: min(640px, calc(100vw - 2rem));
+  max-height: min(80vh, 720px);
+  padding: 0;
+  color: var(--ds-color-text);
+  background: linear-gradient(180deg, #23154d, #140b33);
+  border: 1px solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-card), var(--ds-shadow-glow);
+}
+.ds-dialog::backdrop { background: rgba(5, 2, 15, 0.75); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.ds-dialog[open] { animation: ds-rise var(--ds-dur-med) var(--ds-ease); }
+.ds-dialog__inner { display: flex; flex-direction: column; max-height: inherit; }
+.ds-dialog__header {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--ds-space-4);
+  padding: var(--ds-space-4) var(--ds-space-5);
+  border-bottom: 1px solid var(--ds-color-border);
+}
+.ds-dialog__body {
+  padding: var(--ds-space-5);
+  overflow-y: auto;
+  white-space: pre-line;
+  font-size: var(--ds-text-md);
+  line-height: 1.8;
+}
+.ds-dialog__close {
+  flex: none;
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  font-size: 1.4rem; line-height: 1;
+  color: var(--ds-color-text);
+  background: transparent;
+  border: 1px solid var(--ds-color-border);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.ds-dialog__close:hover { border-color: var(--ds-color-gold); color: var(--ds-color-gold-strong); }
+
+/* ── Keyframes ──────────────────────────────────────────────────────────── */
+@keyframes ds-spin { to { transform: rotate(360deg); } }
+@keyframes ds-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes ds-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.ds-reveal { animation: ds-rise var(--ds-dur-slow) var(--ds-ease) both; }
+
+/* ── Accessibility preferences ──────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+@media (forced-colors: active) {
+  .ds-btn, .ds-input, .ds-card, .ds-dialog { border: 1px solid CanvasText; }
+  .ds-heading--gold { color: CanvasText; background: none; }
+}

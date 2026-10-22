@@ -6,7 +6,10 @@ import requests
 from timezonefinder import TimezoneFinder
 import pytz
 import os
+import re
+import glob
 import json
+import random
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 
@@ -104,18 +107,32 @@ def resolve_timezone(lat, lon):
     return pytz.timezone(tz_name)
 
 
+def moon_period_at(dt_utc):
+    """The sign the Moon occupies at dt_utc, with the UTC moments it entered and will leave that sign."""
+    sign_idx = moon_sign_index(dt_utc)
+    return {
+        "sign": ZODIAC_SIGNS[sign_idx],
+        "start": moon_sign_boundary(dt_utc, sign_idx, forward=False),
+        "end": moon_sign_boundary(dt_utc, sign_idx, forward=True),
+    }
+
+
+def moon_forecast_group(dt, start, end):
+    """1 = dt falls before the midpoint of the start..end time frame, 2 = at or after it."""
+    return 1 if dt < start + (end - start) / 2 else 2
+
+
 def moon_of_transit(lat, lon, local_naive):
     """
     Moon of Transit: the tropical sign the Moon occupies at the given location and local date/time.
     Returns {"sign", "start", "end"}, with start/end as timezone-aware datetimes in the location's timezone.
     """
     local_tz = resolve_timezone(lat, lon)
-    dt_utc = localize(local_tz, local_naive).astimezone(pytz.utc)
-    sign_idx = moon_sign_index(dt_utc)
+    period = moon_period_at(localize(local_tz, local_naive).astimezone(pytz.utc))
     return {
-        "sign": ZODIAC_SIGNS[sign_idx],
-        "start": moon_sign_boundary(dt_utc, sign_idx, forward=False).astimezone(local_tz),
-        "end": moon_sign_boundary(dt_utc, sign_idx, forward=True).astimezone(local_tz),
+        "sign": period["sign"],
+        "start": period["start"].astimezone(local_tz),
+        "end": period["end"].astimezone(local_tz),
     }
 
 
@@ -338,7 +355,7 @@ def moon_transit_calculate():
             "midpoint": fmt(midpoint.astimezone(p["start"].tzinfo)),
             "duration_hours": round((p["end"] - p["start"]).total_seconds() / 3600, 1),
             # 1 = selected date/time falls in the first half of this sign's time frame, 2 = second half
-            "forecast_group": 1 if selected < midpoint else 2,
+            "forecast_group": moon_forecast_group(selected, p["start"], p["end"]),
         }
         if sun_sign:
             house = (ZODIAC_SIGNS.index(p["sign"]) - ZODIAC_SIGNS.index(sun_sign)) % 12
@@ -685,10 +702,29 @@ def moon_transit_forecast():
     if group not in (1, 2):
         return jsonify({"error": "Forecast group must be 1 or 2"}), 400
 
+    try:
+        forecast_text = fetch_moon_transit_forecast(house, group)
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    if not forecast_text:
+        return jsonify({"error": "No forecast found for this house."}), 404
+
+    return jsonify(
+        {
+            "house": HOUSE_ORDINALS[house - 1],
+            "forecast_group": group,
+            "forecast_text": forecast_text,
+        }
+    )
+
+
+def fetch_moon_transit_forecast(house, group):
+    """Moon of Transit forecast text for a house (1-12) and forecast group, or None if there is none.
+    Raises RuntimeError when the database is not configured or the query fails."""
     engine = get_engine()
     if engine is None:
-        return jsonify({"error": "ASTRO_DB_URL environment variable is not set."}), 500
-
+        raise RuntimeError("ASTRO_DB_URL environment variable is not set.")
     try:
         with engine.connect() as conn:
             row = conn.execute(
@@ -703,16 +739,99 @@ def moon_transit_forecast():
                 {"house": house, "group": group},
             ).fetchone()
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        raise RuntimeError(str(exc)) from exc
+    return row.forecast_text if row is not None else None
 
-    if row is None or not row.forecast_text:
-        return jsonify({"error": "No forecast found for this house."}), 404
+
+# ── Landing page (Hebrew, for ad campaigns) ──────────────────────────────────
+MEDIA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
+LANDING_INTRO_VIDEO = "videos/Intro_for_secondary_moon.mp4"
+# Placeholder forecast videos until a dedicated video exists per forecast
+LANDING_FORECAST_VIDEO_GLOB = os.path.join(MEDIA_DIR, "videos", "video_demo_*.mp4")
+LANDING_DEFAULT_TZ = "Asia/Jerusalem"
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
+
+ZODIAC_SIGNS_HE = {
+    "Aries": "טלה", "Taurus": "שור", "Gemini": "תאומים", "Cancer": "סרטן",
+    "Leo": "אריה", "Virgo": "בתולה", "Libra": "מאזניים", "Scorpio": "עקרב",
+    "Sagittarius": "קשת", "Capricorn": "גדי", "Aquarius": "דלי", "Pisces": "דגים",
+}
+
+
+@app.route("/media/<path:filename>")
+def media(filename):
+    return send_from_directory(MEDIA_DIR, filename)
+
+
+@app.route("/lp/moon")
+def landing_moon():
+    signs = [
+        {"sign": s, "sign_he": ZODIAC_SIGNS_HE[s], "symbol": ZODIAC_SYMBOLS[s]}
+        for s in ZODIAC_SIGNS
+    ]
+    return render_template("landing_moon.html", intro_video=LANDING_INTRO_VIDEO, signs=signs)
+
+
+def parse_landing_dob(value):
+    try:
+        dob = datetime.strptime(str(value or "").strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    return dob if datetime(1900, 1, 1).date() <= dob <= datetime.now().date() else None
+
+
+@app.route("/lp/moon/sign", methods=["POST"])
+def landing_moon_sign():
+    dob = parse_landing_dob((request.get_json() or {}).get("dob"))
+    if dob is None:
+        return jsonify({"error": "תאריך הלידה אינו תקין."}), 400
+    sign = sun_sign_on(dob)
+    return jsonify({"sign": sign, "sign_he": ZODIAC_SIGNS_HE[sign], "symbol": ZODIAC_SYMBOLS[sign]})
+
+
+@app.route("/lp/moon/forecast", methods=["POST"])
+def landing_moon_forecast():
+    data = request.get_json() or {}
+    dob = parse_landing_dob(data.get("dob"))
+    if dob is None:
+        return jsonify({"error": "תאריך הלידה אינו תקין."}), 400
+    email = str(data.get("email") or "").strip()
+    if len(email) > 254 or not EMAIL_RE.match(email):
+        return jsonify({"error": "כתובת המייל אינה תקינה."}), 400
+    tz_name = data.get("tz") if data.get("tz") in pytz.all_timezones_set else LANDING_DEFAULT_TZ
+    local_tz = pytz.timezone(tz_name)
+
+    # The Moon's sign right now does not depend on location; the timezone only formats the times.
+    now_utc = datetime.now(pytz.utc)
+    period = moon_period_at(now_utc)
+    sun_sign = sun_sign_on(dob)
+    house = (ZODIAC_SIGNS.index(period["sign"]) - ZODIAC_SIGNS.index(sun_sign)) % 12 + 1
+    group = moon_forecast_group(now_utc, period["start"], period["end"])
+
+    try:
+        forecast_text = fetch_moon_transit_forecast(house, group)
+    except RuntimeError:
+        forecast_text = None
+
+    videos = glob.glob(LANDING_FORECAST_VIDEO_GLOB)
+    video = os.path.relpath(random.choice(videos), MEDIA_DIR).replace(os.sep, "/") if videos else None
+
+    def fmt(dt):
+        return dt.astimezone(local_tz).strftime("%d/%m %H:%M")
 
     return jsonify(
         {
-            "house": HOUSE_ORDINALS[house - 1],
+            "sun_sign": sun_sign,
+            "sun_sign_he": ZODIAC_SIGNS_HE[sun_sign],
+            "moon_sign": period["sign"],
+            "moon_sign_he": ZODIAC_SIGNS_HE[period["sign"]],
+            "moon_sign_symbol": ZODIAC_SYMBOLS[period["sign"]],
+            "moon_start": fmt(period["start"]),
+            "moon_end": fmt(period["end"]),
+            "house_number": house,
             "forecast_group": group,
-            "forecast_text": row.forecast_text,
+            "forecast_text": forecast_text,
+            "video_url": f"/media/{video}" if video else None,
         }
     )
 

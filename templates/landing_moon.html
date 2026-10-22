@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>מה הירח צופן לכם? | תחזית אישית</title>
+  <meta name="description" content="צפו בסרטון, הזינו את תאריך הלידה שלכם וקבלו תחזית אישית לפי מיקום הירח עכשיו." />
+  <meta name="theme-color" content="#0b0620" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="he_IL" />
+  <meta property="og:title" content="מה הירח צופן לכם בימים הקרובים?" />
+  <meta property="og:description" content="תחזית אישית לפי מיקום הירח עכשיו ותאריך הלידה שלכם." />
+  <meta property="og:image" content="{{ request.url_root }}media/images/yaron_livne.png" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Frank+Ruhl+Libre:wght@700&display=swap" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='landing/ds.css') }}" />
+  <style>
+    /* Page layout only — components come from ds.css */
+    body { padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
+
+    /* Twinkling star field behind everything */
+    .sky, .sky::after {
+      position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background-image:
+        radial-gradient(1.5px 1.5px at 12% 18%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 28% 72%, #fff 50%, transparent 51%),
+        radial-gradient(1.5px 1.5px at 47% 12%, #f5d995 50%, transparent 51%),
+        radial-gradient(1px 1px at 63% 44%, #fff 50%, transparent 51%),
+        radial-gradient(2px 2px at 81% 27%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 91% 83%, #c7bde6 50%, transparent 51%),
+        radial-gradient(1.5px 1.5px at 7% 91%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 38% 39%, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 72% 66%, #f5d995 50%, transparent 51%),
+        radial-gradient(1.5px 1.5px at 55% 93%, #fff 50%, transparent 51%);
+      background-size: 420px 420px;
+    }
+    .sky::after { content: ""; background-size: 260px 260px; background-position: 90px 40px; animation: twinkle 6s ease-in-out infinite alternate; }
+    @keyframes twinkle { from { opacity: 0.25; } to { opacity: 0.9; } }
+
+    .lp-header { max-width: 760px; margin: 0 auto var(--ds-space-4); display: flex; justify-content: center; }
+    .brand { display: inline-flex; align-items: center; gap: var(--ds-space-2); color: var(--ds-color-gold); font-weight: 700; letter-spacing: 0.02em; }
+    .brand .ds-glyph { font-size: 1.3rem; }
+
+    .lp-main { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: var(--ds-space-5); text-align: center; }
+    .lp-intro { display: flex; flex-direction: column; gap: var(--ds-space-2); }
+
+    /* Stage: the intro video, the zodiac wheel and the forecast video share one cell */
+    .stage { display: grid; place-items: center; width: 100%; }
+    .stage > * { grid-area: 1 / 1; }
+    .stage__video { display: flex; flex-direction: column; align-items: center; gap: var(--ds-space-3); width: 100%; }
+    .stage__frame {
+      border-radius: var(--ds-radius-lg); overflow: hidden; background: #000;
+      box-shadow: var(--ds-shadow-card), var(--ds-shadow-glow);
+    }
+    .stage__frame video { width: auto; height: auto; max-width: 100%; max-height: 68vh; max-height: 68dvh; }
+    .stage__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--ds-space-3); }
+
+    .wheel { position: relative; width: min(86vw, 400px); aspect-ratio: 1; }
+    .wheel__halo, .wheel__disc { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .wheel__halo { inset: -7%; width: 114%; height: 114%; animation: halo 120s linear infinite; opacity: 0.8; }
+    @keyframes halo { to { transform: rotate(360deg); } }
+    .wheel__disc { transition: transform 4.6s cubic-bezier(0.12, 0.7, 0.1, 1), filter 0.6s; filter: drop-shadow(0 0 18px rgba(157, 123, 255, 0.35)); }
+    .wheel.is-spinning .wheel__disc { filter: drop-shadow(0 0 34px rgba(245, 217, 149, 0.55)); }
+    .wheel__pointer {
+      position: absolute; top: -4%; left: 50%; z-index: 1; transform: translateX(-50%);
+      width: 0; height: 0;
+      border-inline: 13px solid transparent; border-top: 22px solid var(--ds-color-gold-strong);
+      filter: drop-shadow(0 0 6px rgba(245, 217, 149, 0.8));
+    }
+    .wheel__glyph { font-family: var(--ds-font-glyph); font-size: 30px; fill: var(--ds-color-text); }
+    .wheel__name { font-family: var(--ds-font-body); font-size: 13px; font-weight: 600; fill: var(--ds-color-text-muted); }
+    .wheel__slice { fill: transparent; transition: fill 0.6s; }
+    .wheel__sign.is-active .wheel__slice { fill: rgba(230, 194, 122, 0.3); }
+    .wheel__sign.is-active .wheel__glyph, .wheel__sign.is-active .wheel__name { fill: var(--ds-color-gold-strong); }
+
+    /* Transformations between stage items */
+    .is-leaving { animation: iris-out 1.1s var(--ds-ease) forwards; pointer-events: none; }
+    .stage__video.is-entering { animation: iris-in 1.1s var(--ds-ease) both; }
+    .wheel-wrap.is-entering { animation: wheel-in 1.2s var(--ds-ease) both; }
+    @keyframes iris-out {
+      from { clip-path: circle(75% at 50% 50%); opacity: 1; transform: none; }
+      to   { clip-path: circle(0% at 50% 50%); opacity: 0; transform: rotate(25deg) scale(0.7); }
+    }
+    @keyframes iris-in {
+      from { clip-path: circle(0% at 50% 50%); opacity: 0; }
+      to   { clip-path: circle(75% at 50% 50%); opacity: 1; }
+    }
+    @keyframes wheel-in {
+      from { opacity: 0; transform: scale(0.35) rotate(-150deg); filter: blur(6px); }
+      to   { opacity: 1; transform: none; filter: none; }
+    }
+
+    /* Step panels below the stage */
+    .panel { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: var(--ds-space-4); }
+    .panel [data-step-heading]:focus { outline: none; }
+    .panel [data-step-heading]:focus-visible { outline: 3px solid var(--ds-color-focus); }
+
+    .yaron { display: flex; flex-direction: column; align-items: center; gap: var(--ds-space-4); margin: 0; }
+    .yaron__photo-wrap {
+      width: 120px; height: 120px; border-radius: 50%; padding: 4px;
+      background: conic-gradient(from 0deg, var(--ds-color-gold-strong), var(--ds-color-violet), var(--ds-color-gold-strong));
+      box-shadow: 0 0 30px rgba(230, 194, 122, 0.45);
+      animation: pop 0.8s var(--ds-ease) both;
+    }
+    .yaron__photo { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; object-position: 50% 15%; }
+    .yaron__name { font-size: var(--ds-text-sm); color: var(--ds-color-gold); font-weight: 700; }
+    @keyframes pop { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: none; } }
+    .bubble {
+      position: relative; margin: 0; padding: var(--ds-space-4) var(--ds-space-5);
+      background: var(--ds-color-surface-2); border: 1px solid var(--ds-color-border-strong);
+      border-radius: var(--ds-radius-lg); display: flex; flex-direction: column; gap: var(--ds-space-2);
+      animation: ds-rise 0.8s 0.4s var(--ds-ease) both;
+    }
+    .bubble::before {
+      content: ""; position: absolute; top: -10px; left: 50%; width: 18px; height: 18px;
+      background: inherit; border-top: inherit; border-left: inherit;
+      transform: translateX(-50%) rotate(45deg);
+    }
+    .bubble .ds-heading { font-size: var(--ds-text-lg); }
+
+    .result-sign { font-size: 2.6rem; line-height: 1; color: var(--ds-color-gold-strong); }
+    .result-actions { display: flex; flex-direction: column; gap: var(--ds-space-3); }
+
+    .lp-footer { max-width: 760px; margin: var(--ds-space-7) auto 0; text-align: center; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .sky::after, .wheel__halo { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sky" aria-hidden="true"></div>
+
+  <header class="lp-header">
+    <span class="brand"><span class="ds-glyph" aria-hidden="true">☽&#xFE0E;</span> ירח בטרנזיט</span>
+  </header>
+
+  <main class="lp-main" id="main">
+    <div class="lp-intro">
+      <h1 class="ds-heading ds-heading--xl ds-heading--gold">מה הירח צופן לכם בימים הקרובים?</h1>
+      <p class="ds-text">תחזית אישית לפי מיקום הירח עכשיו ותאריך הלידה שלכם</p>
+    </div>
+
+    <div class="stage">
+      <!-- 1. Intro video -->
+      <div class="stage__video" id="intro-wrap">
+        <div class="stage__frame">
+          <video id="intro-video" src="/media/{{ intro_video }}" autoplay muted playsinline controls preload="auto"
+                 aria-label="סרטון פתיחה"></video>
+        </div>
+        <div class="stage__actions">
+          <button type="button" class="ds-btn ds-btn--ghost ds-btn--sm" id="intro-sound" aria-pressed="false">
+            <span aria-hidden="true">🔊&#xFE0E;</span> <span>הפעלת קול</span>
+          </button>
+          <button type="button" class="ds-btn ds-btn--ghost ds-btn--sm" id="intro-skip">
+            דלגו לתחזית <span aria-hidden="true">←</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. Zodiac wheel -->
+      <div class="wheel-wrap" id="wheel-wrap" hidden>
+        <div class="wheel" id="wheel">
+          <svg class="wheel__halo" viewBox="-200 -200 400 400" aria-hidden="true" focusable="false">
+            <circle r="196" fill="none" stroke="rgba(230,194,122,0.35)" stroke-width="1" stroke-dasharray="2 10" />
+            <circle r="188" fill="none" stroke="rgba(157,123,255,0.3)" stroke-width="0.6" />
+            {% for i in range(8) %}
+            <path transform="rotate({{ i * 45 }})" d="M0 -199 L2 -192 L0 -185 L-2 -192 Z" fill="#f5d995" />
+            {% endfor %}
+          </svg>
+          <span class="wheel__pointer" aria-hidden="true"></span>
+          <svg class="wheel__disc" id="wheel-disc" viewBox="-200 -200 400 400" role="img" aria-labelledby="wheel-title" focusable="false">
+            <title id="wheel-title">גלגל המזלות</title>
+            <defs>
+              <radialGradient id="wheel-fill" r="0.5">
+                <stop offset="0%" stop-color="#2c1d63" />
+                <stop offset="70%" stop-color="#1a0f45" />
+                <stop offset="100%" stop-color="#0f0830" />
+              </radialGradient>
+            </defs>
+            <circle r="186" fill="url(#wheel-fill)" stroke="#e6c27a" stroke-width="2" />
+            <circle r="178" fill="none" stroke="rgba(230,194,122,0.5)" stroke-width="0.8" stroke-dasharray="1.5 7.8" />
+            <circle r="100" fill="none" stroke="rgba(230,194,122,0.6)" stroke-width="1.2" />
+            <circle r="64" fill="rgba(157,123,255,0.12)" stroke="rgba(230,194,122,0.45)" stroke-width="1" />
+            {% for s in signs %}
+            <line transform="rotate({{ loop.index0 * 30 + 15 }})" x1="0" y1="-100" x2="0" y2="-186" stroke="rgba(230,194,122,0.45)" stroke-width="1" />
+            <g class="wheel__sign" data-sign="{{ s.sign }}" transform="rotate({{ loop.index0 * 30 }})">
+              <path class="wheel__slice" d="M -48.14 -179.66 A 186 186 0 0 1 48.14 -179.66 L 25.88 -96.59 A 100 100 0 0 0 -25.88 -96.59 Z" />
+              <text class="wheel__glyph" y="-148" text-anchor="middle" dominant-baseline="central">{{ s.symbol }}&#xFE0E;</text>
+              <text class="wheel__name" y="-117" text-anchor="middle" dominant-baseline="central">{{ s.sign_he }}</text>
+            </g>
+            {% endfor %}
+            {% for i in range(12) %}
+            <line transform="rotate({{ i * 30 }})" x1="0" y1="-64" x2="0" y2="-100" stroke="rgba(230,194,122,0.25)" stroke-width="0.8" />
+            {% endfor %}
+            <text y="2" text-anchor="middle" dominant-baseline="central" font-size="54" fill="#f5d995" class="wheel__glyph">☽&#xFE0E;</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- 3. Forecast video -->
+      <div class="stage__video" id="forecast-wrap" hidden>
+        <div class="stage__frame">
+          <video id="forecast-video" playsinline controls preload="auto" aria-label="סרטון התחזית האישית שלכם"></video>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step A: date of birth -->
+    <section class="panel ds-card ds-reveal" id="step-dob" aria-labelledby="dob-title" hidden>
+      <h2 class="ds-heading ds-heading--lg" id="dob-title" tabindex="-1" data-step-heading>גלו מה הירח אומר עליכם</h2>
+      <p class="ds-text">הזינו את תאריך הלידה שלכם, ונפיק עבורכם תחזית אישית לפי מיקום הירח עכשיו.</p>
+      <form class="ds-form" id="dob-form" autocomplete="on">
+        <div class="ds-field">
+          <label class="ds-field__label" for="dob">תאריך לידה</label>
+          <input class="ds-input ds-input--ltr" id="dob" name="bday" type="text" inputmode="numeric" autocomplete="bday"
+                 placeholder="יום/חודש/שנה" maxlength="10" data-ds-rules="required date" data-ds-mask="date"
+                 data-ds-required-msg="יש להזין תאריך לידה." aria-describedby="dob-hint dob-error" required />
+          <p class="ds-field__hint" id="dob-hint">לדוגמה: 24/03/1988</p>
+          <p class="ds-field__error" id="dob-error" aria-live="polite"></p>
+        </div>
+        <p class="ds-form__error" role="alert" data-ds-form-error></p>
+        <button type="submit" class="ds-btn ds-btn--primary ds-btn--block">שליחה</button>
+      </form>
+    </section>
+
+    <!-- Step B: Yaron + e-mail -->
+    <section class="panel ds-card ds-reveal" id="step-email" aria-labelledby="yaron-quote" hidden>
+      <figure class="yaron">
+        <span class="yaron__photo-wrap">
+          <img class="yaron__photo" src="/media/images/yaron_livne.png" alt="" width="132" height="212" />
+        </span>
+        <figcaption class="yaron__name">ירון ליבנה</figcaption>
+        <blockquote class="bubble">
+          <h2 class="ds-heading" id="yaron-quote" tabindex="-1" data-step-heading>
+            ”הפקתי את התחזית לבני מזל <span id="yaron-sign"></span> על פי תאריך הלידה שהזנתם“
+          </h2>
+          <p class="ds-text">לצפייה בתחזית הזינו את כתובת המייל שלכם</p>
+        </blockquote>
+      </figure>
+      <form class="ds-form" id="email-form">
+        <div class="ds-field">
+          <label class="ds-field__label" for="email">כתובת מייל</label>
+          <input class="ds-input ds-input--ltr" id="email" name="email" type="email" inputmode="email" autocomplete="email"
+                 placeholder="name@example.com" maxlength="254" data-ds-rules="required email"
+                 data-ds-required-msg="יש להזין כתובת מייל." aria-describedby="email-error" required />
+          <p class="ds-field__error" id="email-error" aria-live="polite"></p>
+        </div>
+        <p class="ds-form__error" role="alert" data-ds-form-error></p>
+        <button type="submit" class="ds-btn ds-btn--primary ds-btn--block">לצפייה בתחזית</button>
+      </form>
+    </section>
+
+    <!-- Step C: forecast -->
+    <section class="panel ds-card ds-reveal" id="step-result" aria-labelledby="result-title" hidden>
+      <span class="result-sign ds-glyph" id="result-symbol" aria-hidden="true"></span>
+      <h2 class="ds-heading ds-heading--lg" id="result-title" tabindex="-1" data-step-heading></h2>
+      <p class="ds-text" id="result-summary"></p>
+      <p class="ds-text ds-text--sm" id="result-video-note" hidden>סרטון התחזית אינו זמין כרגע — אפשר לקרוא את התחזית בטקסט.</p>
+      <div class="result-actions">
+        <button type="button" class="ds-btn ds-btn--primary ds-btn--block" id="show-text" aria-haspopup="dialog">
+          הצגת התחזית בטקסט
+        </button>
+        <button type="button" class="ds-btn ds-btn--ghost ds-btn--block" id="restart">בדיקה לתאריך לידה אחר</button>
+      </div>
+    </section>
+
+    <p class="ds-visually-hidden" id="live" aria-live="polite"></p>
+  </main>
+
+  <footer class="lp-footer">
+    <p class="ds-text ds-text--sm">התחזית מבוססת על מיקום הירח בשמיים ברגע זה ועל מזל השמש לפי תאריך הלידה.</p>
+  </footer>
+
+  <dialog class="ds-dialog" id="forecast-dialog" aria-labelledby="dialog-title">
+    <div class="ds-dialog__inner">
+      <div class="ds-dialog__header">
+        <h2 class="ds-heading ds-heading--lg" id="dialog-title">התחזית שלכם</h2>
+        <form method="dialog">
+          <button class="ds-dialog__close" aria-label="סגירה"><span aria-hidden="true">×</span></button>
+        </form>
+      </div>
+      <div class="ds-dialog__body" id="dialog-body"></div>
+    </div>
+  </dialog>
+
+  <script src="{{ url_for('static', filename='landing/ds.js') }}"></script>
+  <script>
+    (function () {
+      'use strict';
+      const $ = id => document.getElementById(id);
+      const SIGNS = {{ signs | map(attribute='sign') | list | tojson }};
+      const HOUSES_HE = ['הראשון', 'השני', 'השלישי', 'הרביעי', 'החמישי', 'השישי',
+                         'השביעי', 'השמיני', 'התשיעי', 'העשירי', 'האחד-עשר', 'השנים-עשר'];
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const SWAP_MS = reduceMotion ? 50 : 1100;
+      const SPIN_MS = reduceMotion ? 600 : 4600;
+
+      const introVideo = $('intro-video');
+      const forecastVideo = $('forecast-video');
+      const wheel = $('wheel');
+      const disc = $('wheel-disc');
+      const steps = [$('step-dob'), $('step-email'), $('step-result')];
+      const state = { dob: null, sign: null, forecast: null, rotation: 0, introDone: false };
+
+      function announce(msg) {
+        const el = $('live');
+        el.textContent = '';
+        setTimeout(() => { el.textContent = msg; }, 50);
+      }
+
+      // Swap two stage items with the "transformation" animation; resolves once the new one is in place.
+      function swapStage(outEl, inEl) {
+        inEl.hidden = false;
+        outEl.classList.add('is-leaving');
+        inEl.classList.add('is-entering');
+        return new Promise(resolve => setTimeout(() => {
+          outEl.hidden = true;
+          outEl.classList.remove('is-leaving');
+          inEl.classList.remove('is-entering');
+          resolve();
+        }, SWAP_MS));
+      }
+
+      function showStep(step) {
+        steps.forEach(s => { s.hidden = s !== step; });
+        step.querySelector('[data-step-heading]').focus();
+      }
+
+      async function postJson(url, body) {
+        let r, data;
+        try {
+          r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          data = await r.json();
+        } catch (err) {
+          throw new Error('אירעה שגיאת תקשורת. בדקו את החיבור ונסו שוב.');
+        }
+        if (!r.ok) throw new Error(data.error || 'אירעה שגיאה. נסו שוב.');
+        return data;
+      }
+
+      // ── 1. Intro video → zodiac wheel ──────────────────────────────────────
+      function syncSoundButton() {
+        const btn = $('intro-sound');
+        const on = !introVideo.muted;
+        btn.setAttribute('aria-pressed', String(on));
+        btn.lastElementChild.textContent = on ? 'השתקה' : 'הפעלת קול';
+      }
+
+      async function finishIntro() {
+        if (state.introDone) return;
+        state.introDone = true;
+        introVideo.pause();
+        await swapStage($('intro-wrap'), $('wheel-wrap'));
+        showStep($('step-dob'));
+      }
+
+      $('intro-sound').addEventListener('click', () => {
+        introVideo.muted = !introVideo.muted;
+        if (introVideo.paused) introVideo.play().catch(() => {});
+      });
+      introVideo.addEventListener('volumechange', syncSoundButton);
+      introVideo.addEventListener('ended', finishIntro);
+      introVideo.addEventListener('error', finishIntro);
+      $('intro-skip').addEventListener('click', finishIntro);
+      introVideo.play().catch(() => { /* autoplay blocked: the native controls let the user start it */ });
+
+      // ── 2. Wheel spin ──────────────────────────────────────────────────────
+      function spinTo(sign) {
+        const idx = SIGNS.indexOf(sign);
+        const target = ((-idx * 30 - state.rotation) % 360 + 360) % 360;
+        state.rotation += (reduceMotion ? 0 : 360 * 5) + target;
+        wheel.querySelectorAll('.wheel__sign.is-active').forEach(g => g.classList.remove('is-active'));
+        wheel.classList.add('is-spinning');
+        disc.style.transform = `rotate(${state.rotation}deg)`;
+        return new Promise(resolve => setTimeout(() => {
+          wheel.classList.remove('is-spinning');
+          wheel.querySelector(`.wheel__sign[data-sign="${sign}"]`).classList.add('is-active');
+          resolve();
+        }, SPIN_MS));
+      }
+
+      DS.bindForm($('dob-form'), async form => {
+        const btn = form.querySelector('[type="submit"]');
+        const dob = DS.dmyToIso($('dob').value);
+        DS.setBusy(btn, true);
+        let data;
+        try {
+          data = await postJson('/lp/moon/sign', { dob });
+        } catch (err) {
+          DS.setFormError(form, err.message);
+          DS.setBusy(btn, false);
+          return;
+        }
+        state.dob = dob;
+        state.sign = data;
+        announce('מפיקים את התחזית שלכם…');
+        await spinTo(data.sign);
+        DS.setBusy(btn, false);
+        $('wheel-title').textContent = `גלגל המזלות — מזל ${data.sign_he}`;
+        $('yaron-sign').textContent = data.sign_he;
+        showStep($('step-email'));
+      });
+
+      // ── 3. E-mail → forecast video ─────────────────────────────────────────
+      DS.bindForm($('email-form'), async form => {
+        const btn = form.querySelector('[type="submit"]');
+        DS.setBusy(btn, true);
+        let data;
+        try {
+          data = await postJson('/lp/moon/forecast', {
+            dob: state.dob,
+            email: $('email').value.trim(),
+            tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          });
+        } catch (err) {
+          DS.setFormError(form, err.message);
+          DS.setBusy(btn, false);
+          return;
+        }
+        DS.setBusy(btn, false);
+        state.forecast = data;
+
+        $('result-symbol').textContent = data.moon_sign_symbol + '︎';
+        $('result-title').textContent = `התחזית שלכם, בני מזל ${data.sun_sign_he}`;
+        $('result-summary').textContent =
+          `הירח נמצא עכשיו במזל ${data.moon_sign_he}, בבית ${HOUSES_HE[data.house_number - 1]} שלכם ` +
+          `(מ-${data.moon_start} עד ${data.moon_end}).`;
+        $('dialog-body').textContent = data.forecast_text || 'טקסט התחזית אינו זמין כרגע. נסו שוב מאוחר יותר.';
+        $('result-video-note').hidden = Boolean(data.video_url);
+
+        if (data.video_url) {
+          forecastVideo.src = data.video_url;
+          forecastVideo.muted = false;
+          forecastVideo.play().catch(() => {
+            forecastVideo.muted = true;   // browser refused sound without a fresh tap
+            forecastVideo.play().catch(() => {});
+          });
+          await swapStage($('wheel-wrap'), $('forecast-wrap'));
+        }
+        showStep($('step-result'));
+      });
+
+      // ── 4. Text forecast pop-up and restart ────────────────────────────────
+      const dialog = $('forecast-dialog');
+      $('show-text').addEventListener('click', () => dialog.showModal());
+      dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });  // backdrop click
+
+      $('restart').addEventListener('click', async () => {
+        forecastVideo.pause();
+        $('dob-form').reset();
+        $('email-form').reset();
+        if (!$('forecast-wrap').hidden) await swapStage($('forecast-wrap'), $('wheel-wrap'));
+        showStep($('step-dob'));
+      });
+    })();
+  </script>
+</body>
+</html>

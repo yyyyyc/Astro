@@ -3,7 +3,7 @@
 **Languages:** [English](#english) · [עברית](#hebrew)
 
 **Basis:** written from the actual source code (`app.py`, `templates/*.html`) and the live database
-contents, as of version 1.0.2. Labels used throughout:
+contents, as of version 1.0.3. Labels used throughout:
 
 - ✅ **Implemented**: present and working in the code.
 - ❌ **Not implemented**: not found anywhere in the code or database.
@@ -21,7 +21,7 @@ The website gives a person astrological forecasts based on the **position of the
 with several timing techniques. For each result it shows a ready-made forecast text, in Hebrew, taken
 from a database.
 
-It answers four questions:
+It answers four questions, plus a Hebrew landing page for ad campaigns:
 
 | Technique | Page | Question answered | Status |
 |---|---|---|---|
@@ -29,6 +29,7 @@ It answers four questions:
 | Tertiary II | Main page | Where is my Tertiary II (minor-progressed) Moon on a given date? | ✅ |
 | Secondary Progression | Secondary Progression page | Where is my secondary-progressed (day-for-a-year) Moon on a given date? | ✅ |
 | Moon of Transit | Moon of Transit page | Which sign is the real Moon in right now, when does it move on, and what does that mean for me? | ✅ |
+| Moon of Transit (landing) | `/lp/moon` | Same as Moon of Transit, as a short guided funnel in Hebrew for visitors from ads (e.g. Facebook) | ✅ |
 
 The site is **free and open**. There are no user accounts, logins or payments (see section 8).
 
@@ -70,6 +71,26 @@ The site is **free and open**. There are no user accounts, logins or payments (s
 5. The user clicks **Forecast** on any row to see its forecast text. Forecasts need a date of birth;
    without one the buttons are disabled.
 
+### 2.4 Moon of Transit landing page (`/lp/moon`) ✅
+
+A separate, Hebrew-only, right-to-left page with its own design, meant to be opened from ads. It is not
+linked from the main page.
+
+1. The visitor arrives and an **intro video** plays in the centre of the screen
+   (`media/videos/Intro_for_secondary_moon.mp4`). It starts muted, because browsers block autoplay with
+   sound; buttons let the visitor turn the sound on or **skip** to the form.
+2. When the video ends (or is skipped, or fails to load), it **transforms into a zodiac wheel** and a
+   form asks for the **date of birth**.
+3. The visitor clicks **שליחה** (Send). The wheel **spins for about 4.5 seconds** and stops with the
+   visitor's Sun sign under the pointer.
+4. A photo of **Yaron** appears with the message: "הפקתי את התחזית לבני מזל <sign> על פי תאריך הלידה
+   שהזנתם", followed by "לצפייה בתחזית הזינו את כתובת המייל שלכם", and an **e-mail** field.
+5. After a valid e-mail is entered, the wheel transforms into the **forecast video**, and a short summary
+   says which sign the Moon is in now, which house that is for the visitor, and the time frame.
+6. The forecast **text is not shown automatically**. The button **הצגת התחזית בטקסט** (Show the forecast
+   as text) opens it in a pop-up window.
+7. **בדיקה לתאריך לידה אחר** (Try another date of birth) returns to step 2.
+
 ## 3. Required user inputs
 
 | Input | Tertiary I/II | Secondary | Moon of Transit | Format and rules |
@@ -81,6 +102,14 @@ The site is **free and open**. There are no user accounts, logins or payments (s
 | Location | — | — | Required | Current location or chosen from the search list |
 | Date and time | — | — | Required | `dd/mm/yyyy` and `HH:MM`, local to the location |
 | Date of birth | — | — | Optional | `dd/mm/yyyy`; needed for houses and forecasts |
+
+On the landing page (`/lp/moon`) the inputs are different:
+
+| Input | Required | Format and rules |
+|---|---|---|
+| Date of birth | Yes | `dd/mm/yyyy`; a real date, from 1900, not in the future |
+| E-mail | Yes | Standard address format, at most 254 characters. **Not stored** (see section 7) |
+| Date, time, location | Not asked | The current moment is used; the browser's timezone is used only to display times |
 
 - The **progression time cannot be entered**; it is always 12:00 local time. ❓ See section 9.
 - Location is used **only to determine the timezone**. It does not change the Moon's position.
@@ -171,6 +200,34 @@ to a feature that is still planned.
    - Every period after the current one starts after the chosen time, so it **always gets group 1**. ❓
 7. Clicking **Forecast** looks up the text by house + group (section 6).
 
+### 5.6 Moon of Transit landing page ✅
+
+1. **Sign step** (`POST /lp/moon/sign`): the date of birth gives the Sun sign (same rule as 5.5, at
+   12:00 UTC). The wheel stops on that sign.
+2. **Forecast step** (`POST /lp/moon/forecast`), after the e-mail is validated:
+   - The Moon's sign is taken for **the current moment** (server clock). No location is needed, because
+     the Moon's sign at a given instant is the same everywhere.
+   - **House** and **forecast group** follow exactly the rules of 5.5 (whole-sign houses from the Sun
+     sign; group 1 before the midpoint of the current sign's time frame, group 2 after).
+   - The forecast text is looked up by house + group, as on the Moon of Transit page.
+   - The browser's timezone is sent only to format the start and end times. If it is unknown or invalid,
+     `Asia/Jerusalem` is used.
+3. **Forecast video:** there is no video per forecast yet, so the server picks **one at random** from
+   `media/videos/video_demo_*.mp4`. ❓ See section 9.
+4. If the database is unavailable, the video and summary still appear, and the text pop-up says the text
+   is not available right now.
+
+**Design system** (`static/landing/ds.css`, `static/landing/ds.js`): every landing field uses the same
+classes (`ds-field`, `ds-input`, `ds-btn`…) and the same validation rules, declared on the field
+(`data-ds-rules="required date"` / `"required email"`). Error messages are in Hebrew, appear under the
+field, and are announced to screen readers.
+
+**Accessibility and mobile:** `lang="he" dir="rtl"`; labelled fields with linked hints and errors;
+keyboard focus moves to each new step's heading; a skip button for the intro video; the text pop-up is a
+native modal dialog (Esc closes it); animations are reduced when the visitor asks for reduced motion;
+touch targets are at least 44px; layout works from 320px wide; text inputs are 16px to prevent zoom on
+iOS. ❌ The videos have no captions yet.
+
 ## 6. Mapping calculation results to forecast texts ✅
 
 Each technique has a mapping table and a texts table. Many results can share the same text.
@@ -197,6 +254,8 @@ Rules:
 
 - **Read-only.** The site only reads forecast texts. It never inserts, updates or deletes data, and
   stores nothing about users or their calculations.
+- The landing page's **e-mail address is validated but not saved anywhere** ❌. There is no table for it.
+  ❓ See section 9.
 - Database: Supabase PostgreSQL. The connection comes from the `ASTRO_DB_URL` environment variable.
   If it is missing, forecasts show an error, but calculations still work.
 - Tables used: the four mapping/text pairs in section 6, plus `tbl_signs` (sign names; used only by
@@ -210,8 +269,8 @@ Rules:
 There are no user accounts, subscriptions, payment handling, usage limits or "premium" texts. No
 related tables exist in the database.
 
-**Possibly planned (not connected):** an untracked `media/` folder contains demo audio, demo video and
-a photo. Nothing in the site uses these files.
+**Media files:** the `media/` folder is served at `/media/…`. The landing page uses the intro video,
+Yaron's photo and the demo videos (section 5.6). The demo audio files are not used.
 
 ## 9. Business rules, validations and exceptions
 
@@ -228,6 +287,8 @@ a photo. Nothing in the site uses these files.
 | Sign must be valid; degree 0–29 | Forecast lookups | "Unknown sign" / "Degree must be between 0 and 29" |
 | House 1–12; group 1 or 2 | Moon of Transit forecast | "House must be between 1 and 12" / "Forecast group must be 1 or 2" |
 | Current location unavailable | Moon of Transit | "Current location unavailable — please type a location." |
+| Date of birth required, `dd/mm/yyyy`, real date, from 1900, not in the future | Landing page | "יש להזין תאריך לידה." / "יש להזין תאריך תקין…" / "תאריך הלידה לא יכול להיות בעתיד." (server: "תאריך הלידה אינו תקין.") |
+| E-mail required, valid format | Landing page | "יש להזין כתובת מייל." / "יש להזין כתובת מייל תקינה…" (server: "כתובת המייל אינה תקינה.") |
 
 **Business rules ✅**
 
@@ -250,6 +311,10 @@ a photo. Nothing in the site uses these files.
 7. **Sun sign from date of birth** is taken at 12:00 UTC. People born on a day the Sun changes sign may
    get the neighbouring sign. Should a birth time be asked for?
 8. **Whole degree by truncation** is used for all forecast lookups; rounding was not chosen. Confirm.
+9. **Landing page e-mails** are validated but not stored or sent anywhere. Where should they go (a new
+   database table, a mailing service)? Is a marketing-consent checkbox needed?
+10. **Landing page forecast videos** are a random demo video. How will each forecast (house + group)
+    map to its own video, and will the videos have captions?
 
 ---
 
@@ -264,7 +329,7 @@ a photo. Nothing in the site uses these files.
 האתר מספק לאדם תחזיות אסטרולוגיות המבוססות על **מיקום הירח**, המחושב בכמה שיטות תזמון. לכל תוצאה
 הוא מציג טקסט תחזית מוכן בעברית, שנשלף ממסד נתונים.
 
-האתר עונה על ארבע שאלות:
+האתר עונה על ארבע שאלות, ובנוסף יש לו עמוד נחיתה בעברית לקמפיינים:
 
 | שיטה | עמוד | השאלה | סטטוס |
 |---|---|---|---|
@@ -272,6 +337,7 @@ a photo. Nothing in the site uses these files.
 | Tertiary II ‏(טרשיארי II) | העמוד הראשי | היכן נמצא הירח המתקדם שלי בשיטת Tertiary II (פרוגרסיה מינורית) בתאריך מסוים? | ✅ |
 | Secondary Progression ‏(פרוגרסיה סקנדרית) | עמוד הפרוגרסיה הסקנדרית | היכן נמצא הירח המתקדם שלי בשיטת יום-לשנה בתאריך מסוים? | ✅ |
 | Moon of Transit ‏(ירח בטרנזיט) | עמוד הירח בטרנזיט | באיזה מזל נמצא הירח האמיתי עכשיו, מתי יעבור הלאה, ומה המשמעות עבורי? | ✅ |
+| ירח בטרנזיט (עמוד נחיתה) | `/lp/moon` | כמו ירח בטרנזיט, כתהליך קצר ומודרך בעברית למבקרים שמגיעים ממודעות (למשל פייסבוק) | ✅ |
 
 האתר **חינמי ופתוח**. אין חשבונות משתמש, התחברות או תשלומים (ראו סעיף 8).
 
@@ -312,6 +378,23 @@ a photo. Nothing in the site uses these files.
 5. המשתמש לוחץ על **Forecast** בשורה כלשהי כדי לראות את טקסט התחזית שלה. תחזיות דורשות תאריך
    לידה; בלעדיו הכפתורים מושבתים.
 
+### 2.4 עמוד הנחיתה של ירח בטרנזיט (`/lp/moon`) ✅
+
+עמוד נפרד, בעברית בלבד ומימין לשמאל, עם עיצוב משלו, שמיועד להיפתח ממודעות. אין אליו קישור מהעמוד הראשי.
+
+1. המבקר מגיע, ו**סרטון פתיחה** מתנגן במרכז המסך (`media/videos/Intro_for_secondary_moon.mp4`).
+   הסרטון מתחיל מושתק, כי דפדפנים חוסמים ניגון אוטומטי עם קול; כפתורים מאפשרים להפעיל קול או
+   **לדלג** לטופס.
+2. כשהסרטון מסתיים (או כשמדלגים עליו, או כשהוא לא נטען), הוא **הופך לגלגל מזלות** וטופס מבקש את
+   **תאריך הלידה**.
+3. המבקר לוחץ על **שליחה**. הגלגל **מסתובב כ-4.5 שניות** ונעצר כשמזל השמש של המבקר מתחת למחוג.
+4. מופיעה תמונה של **ירון** עם ההודעה: "הפקתי את התחזית לבני מזל <מזל> על פי תאריך הלידה שהזנתם",
+   ואחריה "לצפייה בתחזית הזינו את כתובת המייל שלכם", ושדה **מייל**.
+5. אחרי הזנת מייל תקין, הגלגל הופך ל**סרטון התחזית**, וסיכום קצר מציין באיזה מזל הירח נמצא עכשיו,
+   באיזה בית זה עבור המבקר, ואת טווח הזמן.
+6. **טקסט התחזית לא מוצג אוטומטית.** הכפתור **הצגת התחזית בטקסט** פותח אותו בחלון קופץ.
+7. **בדיקה לתאריך לידה אחר** מחזיר לשלב 2.
+
 ## 3. קלט נדרש מהמשתמש
 
 | קלט | Tertiary I/II | סקנדרית | ירח בטרנזיט | פורמט וכללים |
@@ -323,6 +406,14 @@ a photo. Nothing in the site uses these files.
 | מיקום | — | — | חובה | המיקום הנוכחי או מקום שנבחר מרשימת החיפוש |
 | תאריך ושעה | — | — | חובה | `dd/mm/yyyy` ו-`HH:MM`, בשעון המקומי של המיקום |
 | תאריך לידה | — | — | אופציונלי | `dd/mm/yyyy`; נדרש לבתים ולתחזיות |
+
+בעמוד הנחיתה (`/lp/moon`) הקלט שונה:
+
+| קלט | חובה | פורמט וכללים |
+|---|---|---|
+| תאריך לידה | כן | `dd/mm/yyyy`; תאריך אמיתי, מ-1900, לא בעתיד |
+| מייל | כן | פורמט כתובת רגיל, עד 254 תווים. **לא נשמר** (ראו סעיף 7) |
+| תאריך, שעה, מיקום | לא נשאלים | נעשה שימוש ברגע הנוכחי; אזור הזמן של הדפדפן משמש רק להצגת השעות |
 
 - **אי אפשר להזין את שעת הפרוגרסיה**; היא תמיד 12:00 בשעון המקומי. ❓ ראו סעיף 9.
 - המיקום משמש **רק לקביעת אזור הזמן**. הוא אינו משנה את מיקום הירח.
@@ -410,6 +501,32 @@ a photo. Nothing in the site uses these files.
    - כל תקופה שאחרי התקופה הנוכחית מתחילה אחרי הזמן שנבחר, ולכן היא **תמיד מקבלת קבוצה 1**. ❓
 7. לחיצה על **Forecast** שולפת את הטקסט לפי בית + קבוצה (סעיף 6).
 
+### 5.6 עמוד הנחיתה של ירח בטרנזיט ✅
+
+1. **שלב המזל** (`POST /lp/moon/sign`): תאריך הלידה נותן את מזל השמש (אותו כלל כמו ב-5.5, ב-12:00
+   UTC). הגלגל נעצר על המזל הזה.
+2. **שלב התחזית** (`POST /lp/moon/forecast`), אחרי בדיקת תקינות המייל:
+   - מזל הירח נלקח עבור **הרגע הנוכחי** (שעון השרת). אין צורך במיקום, כי מזל הירח ברגע נתון זהה
+     בכל מקום.
+   - **הבית** ו**קבוצת התחזית** נקבעים בדיוק לפי הכללים של 5.5 (בתים של מזל שלם ממזל השמש; קבוצה 1
+     לפני נקודת האמצע של טווח הזמן של המזל הנוכחי, קבוצה 2 אחריה).
+   - טקסט התחזית נשלף לפי בית + קבוצה, כמו בעמוד הירח בטרנזיט.
+   - אזור הזמן של הדפדפן נשלח רק כדי לעצב את שעות ההתחלה והסיום. אם הוא לא ידוע או לא תקין, נעשה
+     שימוש ב-`Asia/Jerusalem`.
+3. **סרטון התחזית:** עדיין אין סרטון לכל תחזית, ולכן השרת בוחר **אחד באקראי** מתוך
+   `media/videos/video_demo_*.mp4`. ❓ ראו סעיף 9.
+4. אם מסד הנתונים אינו זמין, הסרטון והסיכום עדיין מוצגים, והחלון הקופץ מודיע שהטקסט אינו זמין כרגע.
+
+**מערכת עיצוב** (`static/landing/ds.css`, `static/landing/ds.js`): כל שדות עמוד הנחיתה משתמשים באותן
+מחלקות (`ds-field`, `ds-input`, `ds-btn`…) ובאותם כללי בדיקה, שמוגדרים על השדה עצמו
+(`data-ds-rules="required date"` / `"required email"`). הודעות השגיאה בעברית, מופיעות מתחת לשדה ומוקראות
+לקוראי מסך.
+
+**נגישות ומובייל:** `lang="he" dir="rtl"`; שדות עם תוויות, ורמזים ושגיאות מקושרים אליהם; פוקוס המקלדת
+עובר לכותרת של כל שלב חדש; כפתור דילוג על סרטון הפתיחה; החלון הקופץ הוא חלון מודאלי מובנה (Esc סוגר
+אותו); האנימציות מצומצמות כשהמבקר ביקש תנועה מופחתת; אזורי מגע בגודל 44px לפחות; הפריסה עובדת מרוחב
+320px; שדות הקלט בגודל 16px כדי למנוע הגדלה ב-iOS. ❌ לסרטונים עדיין אין כתוביות.
+
 ## 6. מיפוי תוצאות החישוב לטקסטי תחזית ✅
 
 לכל שיטה יש טבלת מיפוי וטבלת טקסטים. תוצאות רבות יכולות לחלוק את אותו טקסט.
@@ -436,6 +553,7 @@ a photo. Nothing in the site uses these files.
 
 - **קריאה בלבד.** האתר רק קורא טקסטי תחזית. הוא לעולם אינו מוסיף, מעדכן או מוחק נתונים, ואינו שומר
   דבר על המשתמשים או על החישובים שלהם.
+- **כתובת המייל בעמוד הנחיתה נבדקת אך אינה נשמרת בשום מקום** ❌. אין לה טבלה. ❓ ראו סעיף 9.
 - מסד הנתונים: Supabase PostgreSQL. פרטי החיבור נלקחים ממשתנה הסביבה `ASTRO_DB_URL`.
   אם הוא חסר, התחזיות מציגות שגיאה, אבל החישובים ממשיכים לעבוד.
 - טבלאות בשימוש: ארבעת זוגות טבלאות המיפוי והטקסטים שבסעיף 6, ובנוסף `tbl_signs` (שמות המזלות;
@@ -448,8 +566,8 @@ a photo. Nothing in the site uses these files.
 **לא מיושם.** כל היכולות וכל התחזיות זמינות לכולם ללא התחברות. אין חשבונות משתמש, מנויים, טיפול
 בתשלומים, הגבלות שימוש או טקסטי "פרימיום". אין טבלאות כאלה במסד הנתונים.
 
-**ייתכן שמתוכנן (לא מחובר):** תיקייה `media/` שאינה במעקב git מכילה קבצי אודיו לדוגמה, וידאו לדוגמה
-ותמונה. אף חלק באתר אינו משתמש בקבצים האלה.
+**קובצי מדיה:** התיקייה `media/` מוגשת בכתובת `/media/…`. עמוד הנחיתה משתמש בסרטון הפתיחה, בתמונה של
+ירון ובסרטוני הדוגמה (סעיף 5.6). קובצי האודיו לדוגמה אינם בשימוש.
 
 ## 9. כללים עסקיים, בדיקות תקינות וחריגים
 
@@ -466,6 +584,8 @@ a photo. Nothing in the site uses these files.
 | מזל תקין; מעלה 0–29 | שליפות תחזית | "Unknown sign" / "Degree must be between 0 and 29" |
 | בית 1–12; קבוצה 1 או 2 | תחזית ירח בטרנזיט | "House must be between 1 and 12" / "Forecast group must be 1 or 2" |
 | המיקום הנוכחי אינו זמין | ירח בטרנזיט | "Current location unavailable — please type a location." |
+| תאריך לידה חובה, `dd/mm/yyyy`, תאריך אמיתי, מ-1900, לא בעתיד | עמוד הנחיתה | "יש להזין תאריך לידה." / "יש להזין תאריך תקין…" / "תאריך הלידה לא יכול להיות בעתיד." (בשרת: "תאריך הלידה אינו תקין.") |
+| מייל חובה, בפורמט תקין | עמוד הנחיתה | "יש להזין כתובת מייל." / "יש להזין כתובת מייל תקינה…" (בשרת: "כתובת המייל אינה תקינה.") |
 
 **כללים עסקיים ✅**
 
@@ -488,5 +608,9 @@ a photo. Nothing in the site uses these files.
 7. **מזל השמש לפי תאריך לידה** נלקח ב-12:00 UTC. מי שנולד ביום שבו השמש מחליפה מזל עשוי לקבל את
    המזל הסמוך. האם לבקש גם שעת לידה?
 8. **מעלה שלמה בחיתוך** משמשת בכל שליפות התחזית, ולא עיגול. יש לאשר.
+9. **כתובות מייל בעמוד הנחיתה** נבדקות אך אינן נשמרות ואינן נשלחות לשום מקום. לאן הן צריכות להגיע
+   (טבלה חדשה במסד הנתונים, שירות דיוור)? האם נדרשת תיבת סימון להסכמה לדיוור?
+10. **סרטוני התחזית בעמוד הנחיתה** הם סרטון דוגמה אקראי. איך כל תחזית (בית + קבוצה) תמופה לסרטון
+    משלה, והאם יהיו לסרטונים כתוביות?
 
 </div>
