@@ -77,8 +77,10 @@ A separate, Hebrew-only, right-to-left page with its own design, meant to be ope
 also links to it with the **✦ Landing Page** button.
 
 1. The visitor arrives and an **intro video** plays in the centre of the screen
-   (`media/videos/Intro_for_secondary_moon.mp4`). It starts muted, because browsers block autoplay with
-   sound; buttons let the visitor turn the sound on or **skip** to the form.
+   (`media/videos/Intro_for_secondary_moon.mp4`). It waits on its first frame behind a large
+   **▶ לצפייה בסרטון** (Watch the video) button; one tap plays it **with sound**. (Browsers never allow a
+   video to start with sound before the visitor touches the page, so this tap is required.) A button
+   lets the visitor **skip** to the form, and a mute button appears once the video plays. The intro screen fits the viewport exactly (no vertical scroll).
 2. When the video ends (or is skipped, or fails to load), it **transforms into a zodiac wheel** and a
    form asks for the **date of birth**.
 3. The visitor clicks **שליחה** (Send). The wheel **spins for about 4.5 seconds** and stops with the
@@ -107,7 +109,7 @@ On the landing page (`/lp/moon`) the inputs are different:
 
 | Input | Required | Format and rules |
 |---|---|---|
-| Date of birth | Yes | `dd/mm/yyyy`; a real date, from 1900, not in the future |
+| Date of birth | Yes | `dd/mm/yyyy`, typed or picked from a calendar dialog (which opens 30 years before today when the field is empty); a real date, from 1900, not in the future |
 | E-mail | Yes | Standard address format, at most 254 characters. **Not stored** (see section 7) |
 | Date, time, location | Not asked | The current moment is used; the browser's timezone is used only to display times |
 
@@ -226,7 +228,10 @@ field, and are announced to screen readers.
 keyboard focus moves to each new step's heading; a skip button for the intro video; the text pop-up is a
 native modal dialog (Esc closes it); animations are reduced when the visitor asks for reduced motion;
 touch targets are at least 44px; layout works from 320px wide; text inputs are 16px to prevent zoom on
-iOS. ❌ The videos have no captions yet.
+iOS. On screens at least 900px wide the wheel or video sits beside the step panel, so no step needs
+vertical scrolling at common desktop heights; on phones, steps after the intro may scroll. Date fields
+with `data-ds-picker="date"` get a calendar button that opens the browser's date dialog.
+❌ The videos have no captions yet.
 
 ## 6. Mapping calculation results to forecast texts ✅
 
@@ -383,8 +388,9 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 עמוד נפרד, בעברית בלבד ומימין לשמאל, עם עיצוב משלו, שמיועד להיפתח ממודעות. העמוד הראשי מקשר אליו גם דרך הכפתור **✦ Landing Page**.
 
 1. המבקר מגיע, ו**סרטון פתיחה** מתנגן במרכז המסך (`media/videos/Intro_for_secondary_moon.mp4`).
-   הסרטון מתחיל מושתק, כי דפדפנים חוסמים ניגון אוטומטי עם קול; כפתורים מאפשרים להפעיל קול או
-   **לדלג** לטופס.
+   הסרטון ממתין על הפריים הראשון מאחורי כפתור גדול **▶ לצפייה בסרטון**; הקשה אחת מנגנת אותו **עם קול**.
+   (דפדפנים לעולם אינם מאפשרים לסרטון להתחיל עם קול לפני שהמבקר נגע בעמוד, ולכן ההקשה הזו הכרחית.)
+   כפתור מאפשר **לדלג** לטופס, וכפתור השתקה מופיע כשהסרטון מתנגן. מסך הפתיחה תופס בדיוק את גובה החלון (ללא גלילה אנכית).
 2. כשהסרטון מסתיים (או כשמדלגים עליו, או כשהוא לא נטען), הוא **הופך לגלגל מזלות** וטופס מבקש את
    **תאריך הלידה**.
 3. המבקר לוחץ על **שליחה**. הגלגל **מסתובב כ-4.5 שניות** ונעצר כשמזל השמש של המבקר מתחת למחוג.
@@ -411,7 +417,7 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 
 | קלט | חובה | פורמט וכללים |
 |---|---|---|
-| תאריך לידה | כן | `dd/mm/yyyy`; תאריך אמיתי, מ-1900, לא בעתיד |
+| תאריך לידה | כן | `dd/mm/yyyy`, בהקלדה או בבחירה מחלון לוח שנה (שנפתח 30 שנה לפני היום כשהשדה ריק); תאריך אמיתי, מ-1900, לא בעתיד |
 | מייל | כן | פורמט כתובת רגיל, עד 254 תווים. **לא נשמר** (ראו סעיף 7) |
 | תאריך, שעה, מיקום | לא נשאלים | נעשה שימוש ברגע הנוכחי; אזור הזמן של הדפדפן משמש רק להצגת השעות |
 
@@ -525,7 +531,10 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 **נגישות ומובייל:** `lang="he" dir="rtl"`; שדות עם תוויות, ורמזים ושגיאות מקושרים אליהם; פוקוס המקלדת
 עובר לכותרת של כל שלב חדש; כפתור דילוג על סרטון הפתיחה; החלון הקופץ הוא חלון מודאלי מובנה (Esc סוגר
 אותו); האנימציות מצומצמות כשהמבקר ביקש תנועה מופחתת; אזורי מגע בגודל 44px לפחות; הפריסה עובדת מרוחב
-320px; שדות הקלט בגודל 16px כדי למנוע הגדלה ב-iOS. ❌ לסרטונים עדיין אין כתוביות.
+320px; שדות הקלט בגודל 16px כדי למנוע הגדלה ב-iOS. במסכים ברוחב 900px ומעלה הגלגל או הסרטון מוצגים
+לצד חלונית השלב, כך שאף שלב לא דורש גלילה אנכית בגובהי מסך מחשב נפוצים; בטלפונים, השלבים שאחרי הפתיחה
+עשויים לגלול. שדות תאריך עם `data-ds-picker="date"` מקבלים כפתור לוח שנה שפותח את חלון התאריך של הדפדפן.
+❌ לסרטונים עדיין אין כתוביות.
 
 ## 6. מיפוי תוצאות החישוב לטקסטי תחזית ✅
 

@@ -52,14 +52,50 @@
     .stage { display: grid; place-items: center; width: 100%; }
     .stage > * { grid-area: 1 / 1; }
     .stage__video { display: flex; flex-direction: column; align-items: center; gap: var(--ds-space-3); width: 100%; }
-    .stage__frame {
-      border-radius: var(--ds-radius-lg); overflow: hidden; background: #000;
+    .stage__frame { display: grid; place-items: center; width: 100%; }
+    .stage__frame video {
+      width: auto; height: auto; max-width: 100%; max-height: 68vh; max-height: 68dvh;
+      border-radius: var(--ds-radius-lg); background: #000;
       box-shadow: var(--ds-shadow-card), var(--ds-shadow-glow);
     }
-    .stage__frame video { width: auto; height: auto; max-width: 100%; max-height: 68vh; max-height: 68dvh; }
     .stage__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--ds-space-3); }
+    .stage__frame { position: relative; }
+    .stage__play {
+      position: absolute; top: 50%; left: 50%; z-index: 2; transform: translate(-50%, -50%);
+      font-size: var(--ds-text-lg); padding-inline: var(--ds-space-6);
+      animation: attention 1.6s ease-in-out infinite;
+    }
+    .stage__play:hover { transform: translate(-50%, -50%) scale(1.04); }
+    @keyframes attention { 50% { box-shadow: 0 0 0 8px rgba(245, 217, 149, 0.25), 0 6px 22px rgba(230, 194, 122, 0.35); } }
 
-    .wheel { position: relative; width: min(86vw, 400px); aspect-ratio: 1; }
+    /* Intro screen: exactly one viewport tall, the video takes whatever height is left */
+    body.is-intro { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+    body.is-intro .lp-header { margin-bottom: var(--ds-space-2); }
+    body.is-intro .lp-main { flex: 1; min-height: 0; width: 100%; gap: var(--ds-space-3); }
+    body.is-intro .stage { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+    body.is-intro #intro-wrap { height: 100%; min-height: 0; }
+    body.is-intro #intro-wrap .stage__frame { flex: 1 1 0; min-height: 0; position: relative; }
+    body.is-intro #intro-wrap video { position: absolute; inset: 0; margin: auto; max-height: 100%; }
+    body.is-intro .lp-footer { display: none; }
+
+    .wheel { position: relative; width: min(86vw, 400px, 58vh); aspect-ratio: 1; }
+
+    /* Wide screens: wheel / video beside the step panel, so every step fits without scrolling */
+    @media (min-width: 900px) {
+      body:not(.is-intro) .lp-main {
+        max-width: 1180px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
+        grid-template-areas: "intro intro" "stage panel";
+        align-items: center;
+        column-gap: var(--ds-space-7);
+        row-gap: var(--ds-space-5);
+      }
+      body:not(.is-intro) .lp-intro { grid-area: intro; }
+      body:not(.is-intro) .stage { grid-area: stage; }
+      body:not(.is-intro) .panel { grid-area: panel; }
+      body:not(.is-intro) .stage__frame video { max-height: calc(100vh - 260px); max-height: calc(100dvh - 260px); }
+    }
     .wheel__halo, .wheel__disc { position: absolute; inset: 0; width: 100%; height: 100%; }
     .wheel__halo { inset: -7%; width: 114%; height: 114%; animation: halo 120s linear infinite; opacity: 0.8; }
     @keyframes halo { to { transform: rotate(360deg); } }
@@ -127,12 +163,42 @@
 
     .lp-footer { max-width: 760px; margin: var(--ds-space-7) auto 0; text-align: center; }
 
+    /* Wide screens: compact panels so every step fits one screen (kept last so it overrides the above) */
+    @media (min-width: 900px) {
+      .yaron {
+        display: grid; grid-template-columns: auto 1fr;
+        grid-template-areas: "photo bubble" "name bubble";
+        align-items: center; column-gap: var(--ds-space-5); row-gap: var(--ds-space-2);
+      }
+      .yaron__photo-wrap { grid-area: photo; width: 96px; height: 96px; justify-self: center; }
+      .yaron__name { grid-area: name; }
+      .yaron .bubble { grid-area: bubble; text-align: start; }
+      .bubble::before {   /* arrow points sideways at the photo (on the right in RTL) */
+        top: 50%; left: auto; right: -10px;
+        border-left: 0; border-bottom: 0; border-right: inherit;
+        transform: translateY(-50%) rotate(45deg);
+      }
+      .lp-footer { margin-top: var(--ds-space-4); }
+    }
+    /* Short wide screens (laptops, Windows display scaling): tighten vertical rhythm */
+    @media (min-width: 900px) and (max-height: 860px) {
+      body { padding-top: 12px; padding-bottom: 12px; }
+      .lp-header { margin-bottom: var(--ds-space-2); }
+      .lp-intro { gap: 0; }
+      .ds-heading--xl { font-size: clamp(1.6rem, 1.1rem + 1.4vw, 2.1rem); }
+      body:not(.is-intro) .lp-main { row-gap: var(--ds-space-4); }
+      .panel { gap: var(--ds-space-3); }
+      .panel.ds-card { padding: var(--ds-space-5); }
+      .wheel { width: min(400px, calc(100vh - 250px)); width: min(400px, calc(100dvh - 250px)); }
+      .lp-footer { margin-top: var(--ds-space-3); }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       .sky::after, .wheel__halo { animation: none; }
     }
   </style>
 </head>
-<body>
+<body class="is-intro">
   <div class="sky" aria-hidden="true"></div>
 
   <header class="lp-header">
@@ -149,11 +215,14 @@
       <!-- 1. Intro video -->
       <div class="stage__video" id="intro-wrap">
         <div class="stage__frame">
-          <video id="intro-video" src="/media/{{ intro_video }}" autoplay muted playsinline controls preload="auto"
+          <video id="intro-video" src="/media/{{ intro_video }}" playsinline controls preload="auto"
                  aria-label="סרטון פתיחה"></video>
+          <button type="button" class="ds-btn ds-btn--primary stage__play" id="intro-play">
+            <span aria-hidden="true">▶&#xFE0E;</span> לצפייה בסרטון
+          </button>
         </div>
         <div class="stage__actions">
-          <button type="button" class="ds-btn ds-btn--ghost ds-btn--sm" id="intro-sound" aria-pressed="false">
+          <button type="button" class="ds-btn ds-btn--ghost ds-btn--sm" id="intro-sound" aria-pressed="true" hidden>
             <span aria-hidden="true">🔊&#xFE0E;</span> <span>הפעלת קול</span>
           </button>
           <button type="button" class="ds-btn ds-btn--ghost ds-btn--sm" id="intro-skip">
@@ -218,7 +287,7 @@
         <div class="ds-field">
           <label class="ds-field__label" for="dob">תאריך לידה</label>
           <input class="ds-input ds-input--ltr" id="dob" name="bday" type="text" inputmode="numeric" autocomplete="bday"
-                 placeholder="יום/חודש/שנה" maxlength="10" data-ds-rules="required date" data-ds-mask="date"
+                 placeholder="יום/חודש/שנה" maxlength="10" data-ds-rules="required date" data-ds-mask="date" data-ds-picker="date" data-ds-picker-years-ago="30"
                  data-ds-required-msg="יש להזין תאריך לידה." aria-describedby="dob-hint dob-error" required />
           <p class="ds-field__hint" id="dob-hint">לדוגמה: 24/03/1988</p>
           <p class="ds-field__error" id="dob-error" aria-live="polite"></p>
@@ -351,10 +420,27 @@
         btn.lastElementChild.textContent = on ? 'השתקה' : 'הפעלת קול';
       }
 
+      // Browsers never allow a video to start with sound before the visitor touches the page, so
+      // the intro waits on its first frame behind a play button; one tap plays it with sound.
+      function startIntro() {
+        const playBtn = $('intro-play');
+        introVideo.muted = false;
+        syncSoundButton();
+        playBtn.addEventListener('click', () => {
+          introVideo.muted = false;
+          introVideo.play().catch(() => {});
+        });
+        introVideo.addEventListener('play', () => {
+          playBtn.hidden = true;
+          $('intro-sound').hidden = false;
+        });
+      }
+
       async function finishIntro() {
         if (state.introDone) return;
         state.introDone = true;
         introVideo.pause();
+        document.body.classList.remove('is-intro');
         await swapStage($('intro-wrap'), $('wheel-wrap'));
         showStep($('step-dob'));
       }
@@ -367,7 +453,7 @@
       introVideo.addEventListener('ended', finishIntro);
       introVideo.addEventListener('error', finishIntro);
       $('intro-skip').addEventListener('click', finishIntro);
-      introVideo.play().catch(() => { /* autoplay blocked: the native controls let the user start it */ });
+      startIntro();
 
       // ── 2. Wheel spin ──────────────────────────────────────────────────────
       function spinTo(sign) {

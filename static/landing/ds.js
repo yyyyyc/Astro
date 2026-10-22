@@ -2,6 +2,8 @@
  *
  * Declare rules on an input:   data-ds-rules="required date"
  * Optional input mask:          data-ds-mask="date"
+ * Optional calendar dialog:     data-ds-picker="date"   (adds a button that opens the native date picker)
+ *   data-ds-picker-years-ago="30" — when the field is empty, the dialog opens 30 years before today
  * Each input needs a sibling error element with id "<input id>-error",
  * listed in its aria-describedby. A form may hold one [data-ds-form-error].
  *
@@ -57,6 +59,53 @@
     },
   };
 
+  // Calendar button beside a dd/mm/yyyy field; opens the browser's native date dialog
+  const pickers = {
+    date(input) {
+      const wrap = document.createElement('div');
+      wrap.className = 'ds-input-wrap';
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
+
+      const native = document.createElement('input');
+      native.type = 'date';
+      native.className = 'ds-input-wrap__native';
+      native.tabIndex = -1;
+      native.setAttribute('aria-hidden', 'true');
+      native.min = input.dataset.dsMin || '1900-01-01';
+      native.max = new Date().toISOString().slice(0, 10);
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ds-input-wrap__action';
+      btn.setAttribute('aria-label', 'בחירת תאריך מלוח שנה');
+      btn.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">' +
+        '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/>' +
+        '<path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+      wrap.append(native, btn);
+
+      btn.addEventListener('click', () => {
+        // Open on the typed date, or else on the date data-ds-picker-years-ago years back from today
+        let start = dmyToIso(input.value);
+        if (!start && input.dataset.dsPickerYearsAgo) {
+          const d = new Date();
+          d.setFullYear(d.getFullYear() - Number(input.dataset.dsPickerYearsAgo));
+          start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+        native.value = start || '';
+        try { native.showPicker(); } catch (e) { native.focus(); native.click(); }
+      });
+      native.addEventListener('change', () => {
+        if (!native.value) return;
+        const [y, mo, d] = native.value.split('-');
+        input.value = `${d}/${mo}/${y}`;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        validateField(input);
+        input.focus();
+      });
+    },
+  };
+
   function errorEl(input) {
     return document.getElementById(`${input.id}-error`);
   }
@@ -99,6 +148,7 @@
     form.noValidate = true;  // the rules above replace the browser's own (English) bubbles
     fields(form).forEach(input => {
       if (input.dataset.dsMask && masks[input.dataset.dsMask]) masks[input.dataset.dsMask](input);
+      if (input.dataset.dsPicker && pickers[input.dataset.dsPicker]) pickers[input.dataset.dsPicker](input);
       // Validate on blur once something was typed; clear the message as soon as the user edits.
       input.addEventListener('blur', () => { if (input.value.trim()) validateField(input); });
       input.addEventListener('input', () => {
@@ -119,5 +169,5 @@
     else button.removeAttribute('aria-busy');
   }
 
-  global.DS = { rules, masks, dmyToIso, validateField, validateForm, setFieldError, setFormError, bindForm, setBusy };
+  global.DS = { rules, masks, pickers, dmyToIso, validateField, validateForm, setFieldError, setFormError, bindForm, setBusy };
 })(window);

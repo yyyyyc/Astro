@@ -187,6 +187,26 @@ img, video, svg { display: block; max-width: 100%; }
 .ds-input--ltr { direction: ltr; text-align: right; }
 .ds-input--ltr:placeholder-shown { text-align: right; }
 
+/* Input with an action button (e.g. calendar) on its left — the end side in RTL */
+.ds-input-wrap { position: relative; }
+.ds-input-wrap .ds-input { padding-left: 3.4rem; }
+.ds-input-wrap__action {
+  position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  color: var(--ds-color-gold-strong);
+  background: transparent;
+  border: none;
+  border-radius: var(--ds-radius-sm);
+  cursor: pointer;
+}
+.ds-input-wrap__action:hover { background: rgba(230, 194, 122, 0.14); }
+.ds-input-wrap__native {
+  position: absolute; left: 0; bottom: 0;
+  width: 1px; height: 1px; padding: 0; border: 0;
+  opacity: 0; pointer-events: none;
+}
+
 .ds-form__error {
   margin: 0;
   padding: var(--ds-space-3) var(--ds-space-4);
