@@ -3,9 +3,22 @@
 ## Project overview
 
 This is a Python Flask application that calculates astrological
-tertiary progressions.
+tertiary progressions, secondary progression and the Moon of Transit.
 
 The application uses Supabase PostgreSQL as its database.
+
+The website's business logic (purpose, user workflows, inputs, calculation methods,
+forecast mapping, database use, business rules, open questions) is documented in:
+
+`docs/PROJECT_LOGIC.md`
+
+- Read it before changing calculation, forecast, or validation logic.
+- Update it whenever that logic, a feature, a route, or a business rule changes.
+- It is written in English AND Hebrew (one file, two sections). Any change must be
+  made in both languages.
+- Mark each item as implemented (✅), not implemented (❌), or needing clarification (❓),
+  based on the actual code, not on assumptions.
+- When a ❓ item is answered, update the document and remove it from the open list.
 
 ## Database
 
@@ -37,8 +50,11 @@ read `docs/database-schema.md`.
 ## Main application files
 
 - `app.py` — Flask application and calculation logic
-- `templates/index.html` — main UI
+- `templates/index.html` — main UI (Tertiary I and II)
+- `templates/moon_transit.html` — Moon of Transit page
+- `templates/secondary_progression.html` — Secondary Progression page
 - `docs/database-schema.md` — Supabase database documentation
+- `docs/PROJECT_LOGIC.md` — business logic documentation (English + Hebrew)
 
 ## Versioning
 
