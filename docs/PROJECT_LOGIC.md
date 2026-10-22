@@ -73,8 +73,8 @@ The site is **free and open**. There are no user accounts, logins or payments (s
 
 ### 2.4 Moon of Transit landing page (`/lp/moon`) ✅
 
-A separate, Hebrew-only, right-to-left page with its own design, meant to be opened from ads. It is not
-linked from the main page.
+A separate, Hebrew-only, right-to-left page with its own design, meant to be opened from ads. The main page
+also links to it with the **✦ Landing Page** button.
 
 1. The visitor arrives and an **intro video** plays in the centre of the screen
    (`media/videos/Intro_for_secondary_moon.mp4`). It starts muted, because browsers block autoplay with
@@ -380,7 +380,7 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 
 ### 2.4 עמוד הנחיתה של ירח בטרנזיט (`/lp/moon`) ✅
 
-עמוד נפרד, בעברית בלבד ומימין לשמאל, עם עיצוב משלו, שמיועד להיפתח ממודעות. אין אליו קישור מהעמוד הראשי.
+עמוד נפרד, בעברית בלבד ומימין לשמאל, עם עיצוב משלו, שמיועד להיפתח ממודעות. העמוד הראשי מקשר אליו גם דרך הכפתור **✦ Landing Page**.
 
 1. המבקר מגיע, ו**סרטון פתיחה** מתנגן במרכז המסך (`media/videos/Intro_for_secondary_moon.mp4`).
    הסרטון מתחיל מושתק, כי דפדפנים חוסמים ניגון אוטומטי עם קול; כפתורים מאפשרים להפעיל קול או
