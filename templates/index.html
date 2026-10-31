@@ -16,7 +16,7 @@
       --surface2: #1a1a38;
       --border: #2e2e5e;
       --accent: #7c6fcd;
-      --accent2: #8bd7fa;
+      --accent2: #a78bfa;
       --text: #e2e0ff;
       --muted: #8884aa;
       --gold: #f0c060;
@@ -688,7 +688,7 @@
         const data = await r.json();
         if (my !== seq) return;  // a newer date was entered meanwhile
         if (!data.sign) { hide(); return; }
-        badge.textContent = data.symbol + String.fromCharCode(0xFE0E);  // text glyph, not emoji
+        badge.textContent = data.symbol + '︎';  // text glyph, not emoji
         badge.title = data.sign;
         badge.setAttribute('aria-label', `Sun sign: ${data.sign}`);
         badge.hidden = false;
