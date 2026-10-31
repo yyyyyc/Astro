@@ -204,7 +204,13 @@ def read_version():
         return None
 
 
+_engine = None
+
+
 def get_engine():
+    global _engine
+    if _engine is not None:
+        return _engine
     db_url = os.environ.get("ASTRO_DB_URL")
     if not db_url:
         return None
@@ -212,7 +218,15 @@ def get_engine():
         db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
     elif db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
-    return create_engine(db_url)
+    _engine = create_engine(
+        db_url,
+        pool_size=2,          # connections kept open
+        max_overflow=3,       # extra connections during a burst
+        pool_timeout=10,      # seconds to wait for a free connection
+        pool_recycle=300,     # replace connections after 5 minutes
+        pool_pre_ping=True,   # replace dropped connections before use
+    )
+    return _engine
 
 
 @app.route("/")
@@ -780,6 +794,23 @@ def parse_landing_dob(value):
     return dob if datetime(1900, 1, 1).date() <= dob <= datetime.now().date() else None
 
 
+def save_landing_email(email):
+    """Store a landing page e-mail once, in lower case. A failure is logged without the address
+    and never blocks the visitor's forecast."""
+    engine = get_engine()
+    if engine is None:
+        app.logger.error("Could not save landing page e-mail: ASTRO_DB_URL is not set")
+        return
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("INSERT INTO tbl_landing_emails (email) VALUES (:email) ON CONFLICT (email) DO NOTHING"),
+                {"email": email.lower()},
+            )
+    except Exception as exc:
+        app.logger.error("Could not save landing page e-mail: %s", type(exc).__name__)
+
+
 @app.route("/lp/moon/sign", methods=["POST"])
 def landing_moon_sign():
     dob = parse_landing_dob((request.get_json() or {}).get("dob"))
@@ -798,6 +829,7 @@ def landing_moon_forecast():
     email = str(data.get("email") or "").strip()
     if len(email) > 254 or not EMAIL_RE.match(email):
         return jsonify({"error": "כתובת המייל אינה תקינה."}), 400
+    save_landing_email(email)
     tz_name = data.get("tz") if data.get("tz") in pytz.all_timezones_set else LANDING_DEFAULT_TZ
     local_tz = pytz.timezone(tz_name)
 

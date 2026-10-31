@@ -1,3 +1,6 @@
+-- Security: every table below has row level security on, and anon/authenticated have no access.
+-- The app reaches them through its own database role (ASTRO_DB_URL), not the Supabase API.
+
 public.tbl_signs
   id        bigint       NOT NULL PRIMARY KEY
   sign_id   smallint     NOT NULL UNIQUE CHECK (sign_id BETWEEN 1 AND 12)
@@ -43,3 +46,9 @@ public.tbl_moon_of_transit_daily_forecasts
 public.tbl_moon_of_transit_daily_forecasts_texts
   forecast_id   integer  NOT NULL PRIMARY KEY
   forecast_text text     NULL
+
+public.tbl_landing_emails
+  -- E-mail addresses entered on the landing page (/lp/moon). One row per address, lower case.
+  id         bigint      NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY
+  email      text        NOT NULL UNIQUE CHECK (char_length(email) <= 254 AND email = lower(email))
+  created_at timestamptz NOT NULL DEFAULT now()

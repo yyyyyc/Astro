@@ -110,7 +110,7 @@ On the landing page (`/lp/moon`) the inputs are different:
 | Input | Required | Format and rules |
 |---|---|---|
 | Date of birth | Yes | `dd/mm/yyyy`, typed or picked from a calendar dialog. The field starts filled with the date 30 years before today (the visitor can change it), and the dialog opens on that date if the field was cleared; a real date, from 1900, not in the future |
-| E-mail | Yes | Standard address format, at most 254 characters. **Not stored** (see section 7) |
+| E-mail | Yes | Standard address format, at most 254 characters. Saved in `tbl_landing_emails` (see section 7) |
 | Date, time, location | Not asked | The current moment is used; the browser's timezone is used only to display times |
 
 - The **progression time cannot be entered**; it is always 12:00 local time. ❓ See section 9.
@@ -207,6 +207,8 @@ to a feature that is still planned.
 1. **Sign step** (`POST /lp/moon/sign`): the date of birth gives the Sun sign (same rule as 5.5, at
    12:00 UTC). The wheel stops on that sign.
 2. **Forecast step** (`POST /lp/moon/forecast`), after the e-mail is validated:
+   - The e-mail is saved in `tbl_landing_emails` (section 7). If saving fails, the visitor still gets the
+     forecast and the failure is logged without the address.
    - The Moon's sign is taken for **the current moment** (server clock). No location is needed, because
      the Moon's sign at a given instant is the same everywhere.
    - **House** and **forecast group** follow exactly the rules of 5.5 (whole-sign houses from the Sun
@@ -257,14 +259,17 @@ Rules:
 
 ## 7. Database interactions ✅
 
-- **Read-only.** The site only reads forecast texts. It never inserts, updates or deletes data, and
-  stores nothing about users or their calculations.
-- The landing page's **e-mail address is validated but not saved anywhere** ❌. There is no table for it.
-  ❓ See section 9.
+- **Forecast texts are read-only.** The site never inserts, updates or deletes them, and stores nothing
+  about users' calculations. The date of birth is not stored.
+- **Landing page e-mails are the only data the site writes** ✅. Each valid address is saved once, in lower
+  case, with the time it was first entered, in `tbl_landing_emails`. Nothing is sent to these addresses,
+  and marketing consent is not collected ❌. ❓ See section 9.
+- **Access** ✅: all tables have row level security on, and Supabase's public API roles (`anon`,
+  `authenticated`) have no access. The site connects with its own database role through `ASTRO_DB_URL`.
 - Database: Supabase PostgreSQL. The connection comes from the `ASTRO_DB_URL` environment variable.
   If it is missing, forecasts show an error, but calculations still work.
-- Tables used: the four mapping/text pairs in section 6, plus `tbl_signs` (sign names; used only by
-  the `/signs` debug page).
+- Tables used: the four mapping/text pairs in section 6, `tbl_landing_emails`, and `tbl_signs` (sign
+  names; used only by the `/signs` debug page).
 - Calculations themselves do **not** use the database. Only forecast texts come from it.
 - Schema details: `docs/database-schema.md`.
 
@@ -316,8 +321,8 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 7. **Sun sign from date of birth** is taken at 12:00 UTC. People born on a day the Sun changes sign may
    get the neighbouring sign. Should a birth time be asked for?
 8. **Whole degree by truncation** is used for all forecast lookups; rounding was not chosen. Confirm.
-9. **Landing page e-mails** are validated but not stored or sent anywhere. Where should they go (a new
-   database table, a mailing service)? Is a marketing-consent checkbox needed?
+9. **Landing page e-mails** are stored in `tbl_landing_emails`, but no consent is collected and there is
+   no privacy notice. Is a marketing-consent checkbox needed, and will they go to a mailing service?
 10. **Landing page forecast videos** are a random demo video. How will each forecast (house + group)
     map to its own video, and will the videos have captions?
 
@@ -418,7 +423,7 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 | קלט | חובה | פורמט וכללים |
 |---|---|---|
 | תאריך לידה | כן | `dd/mm/yyyy`, בהקלדה או בבחירה מחלון לוח שנה. השדה מתחיל כשהוא מלא בתאריך של 30 שנה לפני היום (המבקר יכול לשנות אותו), והחלון נפתח על התאריך הזה אם השדה נמחק; תאריך אמיתי, מ-1900, לא בעתיד |
-| מייל | כן | פורמט כתובת רגיל, עד 254 תווים. **לא נשמר** (ראו סעיף 7) |
+| מייל | כן | פורמט כתובת רגיל, עד 254 תווים. נשמר בטבלה `tbl_landing_emails` (ראו סעיף 7) |
 | תאריך, שעה, מיקום | לא נשאלים | נעשה שימוש ברגע הנוכחי; אזור הזמן של הדפדפן משמש רק להצגת השעות |
 
 - **אי אפשר להזין את שעת הפרוגרסיה**; היא תמיד 12:00 בשעון המקומי. ❓ ראו סעיף 9.
@@ -512,6 +517,8 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 1. **שלב המזל** (`POST /lp/moon/sign`): תאריך הלידה נותן את מזל השמש (אותו כלל כמו ב-5.5, ב-12:00
    UTC). הגלגל נעצר על המזל הזה.
 2. **שלב התחזית** (`POST /lp/moon/forecast`), אחרי בדיקת תקינות המייל:
+   - המייל נשמר בטבלה `tbl_landing_emails` (סעיף 7). אם השמירה נכשלת, המבקר עדיין מקבל את התחזית, והכשל
+     נרשם ביומן ללא הכתובת.
    - מזל הירח נלקח עבור **הרגע הנוכחי** (שעון השרת). אין צורך במיקום, כי מזל הירח ברגע נתון זהה
      בכל מקום.
    - **הבית** ו**קבוצת התחזית** נקבעים בדיוק לפי הכללים של 5.5 (בתים של מזל שלם ממזל השמש; קבוצה 1
@@ -560,13 +567,17 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 
 ## 7. עבודה מול מסד הנתונים ✅
 
-- **קריאה בלבד.** האתר רק קורא טקסטי תחזית. הוא לעולם אינו מוסיף, מעדכן או מוחק נתונים, ואינו שומר
-  דבר על המשתמשים או על החישובים שלהם.
-- **כתובת המייל בעמוד הנחיתה נבדקת אך אינה נשמרת בשום מקום** ❌. אין לה טבלה. ❓ ראו סעיף 9.
+- **טקסטי התחזית לקריאה בלבד.** האתר לעולם אינו מוסיף, מעדכן או מוחק אותם, ואינו שומר דבר על החישובים
+  של המשתמשים. תאריך הלידה אינו נשמר.
+- **כתובות המייל מעמוד הנחיתה הן הנתונים היחידים שהאתר כותב** ✅. כל כתובת תקינה נשמרת פעם אחת, באותיות
+  קטנות, עם מועד ההזנה הראשון, בטבלה `tbl_landing_emails`. לא נשלח דבר לכתובות האלה, ולא נאספת הסכמה לדיוור ❌.
+  ❓ ראו סעיף 9.
+- **גישה** ✅: בכל הטבלאות מופעלת אבטחה ברמת השורה (RLS), ולתפקידי ה-API הציבורי של Supabase ‏(`anon`,
+  `authenticated`) אין גישה. האתר מתחבר עם תפקיד מסד הנתונים שלו דרך `ASTRO_DB_URL`.
 - מסד הנתונים: Supabase PostgreSQL. פרטי החיבור נלקחים ממשתנה הסביבה `ASTRO_DB_URL`.
   אם הוא חסר, התחזיות מציגות שגיאה, אבל החישובים ממשיכים לעבוד.
-- טבלאות בשימוש: ארבעת זוגות טבלאות המיפוי והטקסטים שבסעיף 6, ובנוסף `tbl_signs` (שמות המזלות;
-  משמשת רק את עמוד הבדיקה `/signs`).
+- טבלאות בשימוש: ארבעת זוגות טבלאות המיפוי והטקסטים שבסעיף 6, `tbl_landing_emails`, ו-`tbl_signs` (שמות
+  המזלות; משמשת רק את עמוד הבדיקה `/signs`).
 - החישובים עצמם **אינם** משתמשים במסד הנתונים. רק טקסטי התחזית מגיעים ממנו.
 - פרטי המבנה: `docs/database-schema.md`.
 
@@ -617,8 +628,8 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 7. **מזל השמש לפי תאריך לידה** נלקח ב-12:00 UTC. מי שנולד ביום שבו השמש מחליפה מזל עשוי לקבל את
    המזל הסמוך. האם לבקש גם שעת לידה?
 8. **מעלה שלמה בחיתוך** משמשת בכל שליפות התחזית, ולא עיגול. יש לאשר.
-9. **כתובות מייל בעמוד הנחיתה** נבדקות אך אינן נשמרות ואינן נשלחות לשום מקום. לאן הן צריכות להגיע
-   (טבלה חדשה במסד הנתונים, שירות דיוור)? האם נדרשת תיבת סימון להסכמה לדיוור?
+9. **כתובות מייל בעמוד הנחיתה** נשמרות בטבלה `tbl_landing_emails`, אך לא נאספת הסכמה ואין הודעת פרטיות.
+   האם נדרשת תיבת סימון להסכמה לדיוור, והאם הכתובות יועברו לשירות דיוור?
 10. **סרטוני התחזית בעמוד הנחיתה** הם סרטון דוגמה אקראי. איך כל תחזית (בית + קבוצה) תמופה לסרטון
     משלה, והאם יהיו לסרטונים כתוביות?
 
