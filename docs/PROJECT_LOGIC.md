@@ -109,7 +109,7 @@ On the landing page (`/lp/moon`) the inputs are different:
 
 | Input | Required | Format and rules |
 |---|---|---|
-| Date of birth | Yes | `dd/mm/yyyy`, typed or picked from a calendar dialog (which opens 30 years before today when the field is empty); a real date, from 1900, not in the future |
+| Date of birth | Yes | `dd/mm/yyyy`, typed or picked from a calendar dialog. The field starts filled with the date 30 years before today (the visitor can change it), and the dialog opens on that date if the field was cleared; a real date, from 1900, not in the future |
 | E-mail | Yes | Standard address format, at most 254 characters. **Not stored** (see section 7) |
 | Date, time, location | Not asked | The current moment is used; the browser's timezone is used only to display times |
 
@@ -417,7 +417,7 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 
 | קלט | חובה | פורמט וכללים |
 |---|---|---|
-| תאריך לידה | כן | `dd/mm/yyyy`, בהקלדה או בבחירה מחלון לוח שנה (שנפתח 30 שנה לפני היום כשהשדה ריק); תאריך אמיתי, מ-1900, לא בעתיד |
+| תאריך לידה | כן | `dd/mm/yyyy`, בהקלדה או בבחירה מחלון לוח שנה. השדה מתחיל כשהוא מלא בתאריך של 30 שנה לפני היום (המבקר יכול לשנות אותו), והחלון נפתח על התאריך הזה אם השדה נמחק; תאריך אמיתי, מ-1900, לא בעתיד |
 | מייל | כן | פורמט כתובת רגיל, עד 254 תווים. **לא נשמר** (ראו סעיף 7) |
 | תאריך, שעה, מיקום | לא נשאלים | נעשה שימוש ברגע הנוכחי; אזור הזמן של הדפדפן משמש רק להצגת השעות |
 

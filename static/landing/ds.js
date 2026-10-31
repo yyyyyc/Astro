@@ -3,7 +3,8 @@
  * Declare rules on an input:   data-ds-rules="required date"
  * Optional input mask:          data-ds-mask="date"
  * Optional calendar dialog:     data-ds-picker="date"   (adds a button that opens the native date picker)
- *   data-ds-picker-years-ago="30" — when the field is empty, the dialog opens 30 years before today
+ * Optional default date:       data-ds-default-years-ago="30"   (pre-fills dd/mm/yyyy, 30 years before today;
+ *                               form.reset() restores it, and the calendar opens on it when the field is cleared)
  * Each input needs a sibling error element with id "<input id>-error",
  * listed in its aria-describedby. A form may hold one [data-ds-form-error].
  *
@@ -24,6 +25,13 @@
     const dt = new Date(Date.UTC(+y, +mo - 1, +d));
     if (dt.getUTCFullYear() !== +y || dt.getUTCMonth() !== +mo - 1 || dt.getUTCDate() !== +d) return null;
     return `${y}-${mo}-${d}`;
+  }
+
+  function dmyYearsAgo(years) {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - years);
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
   }
 
   // Each rule returns an error message (Hebrew) or '' when the value passes.
@@ -85,14 +93,8 @@
       wrap.append(native, btn);
 
       btn.addEventListener('click', () => {
-        // Open on the typed date, or else on the date data-ds-picker-years-ago years back from today
-        let start = dmyToIso(input.value);
-        if (!start && input.dataset.dsPickerYearsAgo) {
-          const d = new Date();
-          d.setFullYear(d.getFullYear() - Number(input.dataset.dsPickerYearsAgo));
-          start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        }
-        native.value = start || '';
+        // Open on the typed date, or else on the field's default date
+        native.value = dmyToIso(input.value) || dmyToIso(input.defaultValue) || '';
         try { native.showPicker(); } catch (e) { native.focus(); native.click(); }
       });
       native.addEventListener('change', () => {
@@ -147,6 +149,7 @@
   function bindForm(form, onValid) {
     form.noValidate = true;  // the rules above replace the browser's own (English) bubbles
     fields(form).forEach(input => {
+      if (input.dataset.dsDefaultYearsAgo) input.defaultValue = dmyYearsAgo(Number(input.dataset.dsDefaultYearsAgo));
       if (input.dataset.dsMask && masks[input.dataset.dsMask]) masks[input.dataset.dsMask](input);
       if (input.dataset.dsPicker && pickers[input.dataset.dsPicker]) pickers[input.dataset.dsPicker](input);
       // Validate on blur once something was typed; clear the message as soon as the user edits.
