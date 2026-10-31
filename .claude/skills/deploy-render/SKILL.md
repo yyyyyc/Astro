@@ -20,8 +20,8 @@ followed by an optional commit message.
 - `RENDER_SITE_URL` — public URL of the service: `https://tertiary-progression.onrender.com`. Required for verification.
 - `RENDER_SERVICE_ID` — `srv-d8l70apo3t8c73aniiag`. Dashboard (build logs/events):
   `https://dashboard.render.com/web/srv-d8l70apo3t8c73aniiag` — include this link in the report.
-- `RENDER_DEPLOY_HOOK_URL` — optional. Render dashboard → service → Settings → Deploy Hook.
-  Only needed if Auto-Deploy is off. It is a secret: never print it, never put it in a commit or command output.
+- `RENDER_DEPLOY_HOOK_URL` — Render dashboard → service → Settings → Deploy Hook. Fired on every deploy (step 7).
+  It is a secret: never print it, never put it in a commit or command output.
 
 Read them without echoing secrets:
 
@@ -63,7 +63,7 @@ If `RENDER_SITE_URL` is missing, ask the user for it and offer to add it to `.en
 6. **Push:** `git push origin main`. If rejected (remote ahead), `git pull --rebase origin main`,
    resolve, re-run step 4 only if `version.json` conflicts, and push again. Never force-push.
 
-7. **Trigger** (only if `HOOK` is set):
+7. **Trigger** the deploy hook (if `HOOK` is missing from `.env`, say so and rely on Auto-Deploy):
    ```bash
    curl -s -o /dev/null -w "%{http_code}\n" -X POST "$HOOK"
    ```
@@ -76,7 +76,8 @@ If `RENDER_SITE_URL` is missing, ask the user for it and offer to add it to `.en
    ```
    Then smoke the other pages:
    ```bash
-   for p in / /lp/moon; do curl -s -o /dev/null -w "$p %{http_code}\n" "$SITE$p"; done
+   # Print the path separately: in Git Bash, a -w value starting with "/" gets rewritten as a Windows path
+   for p in / /lp/moon; do printf '%s ' "$p"; curl -s -o /dev/null -w '%{http_code}\n' "$SITE$p"; done
    ```
 
 9. **Report:** version, commit hash, live URL, and HTTP results. If verification
