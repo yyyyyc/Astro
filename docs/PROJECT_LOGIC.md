@@ -287,7 +287,8 @@ There are no user accounts, subscriptions, payment handling, usage limits or "pr
 related tables exist in the database.
 
 **Media files:** the `media/` folder is served at `/media/…`. The landing page uses the intro video,
-Yaron's photo and the demo videos (section 5.6). The demo audio files are not used.
+Yaron's photo, the demo videos (section 5.6) and `og_moon.png` as its link preview image (1200×630). The demo
+audio files are not used.
 
 ## 9. Business rules, validations and exceptions
 
@@ -601,7 +602,8 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 בתשלומים, הגבלות שימוש או טקסטי "פרימיום". אין טבלאות כאלה במסד הנתונים.
 
 **קובצי מדיה:** התיקייה `media/` מוגשת בכתובת `/media/…`. עמוד הנחיתה משתמש בסרטון הפתיחה, בתמונה של
-ירון ובסרטוני הדוגמה (סעיף 5.6). קובצי האודיו לדוגמה אינם בשימוש.
+ירון, בסרטוני הדוגמה (סעיף 5.6) וב-`og_moon.png` כתמונת התצוגה המקדימה של הקישור (1200×630). קובצי האודיו
+לדוגמה אינם בשימוש.
 
 ## 9. כללים עסקיים, בדיקות תקינות וחריגים
 
