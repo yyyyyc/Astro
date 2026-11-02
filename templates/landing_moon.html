@@ -11,6 +11,21 @@
   <meta property="og:title" content="מה הירח צופן לכם בימים הקרובים?" />
   <meta property="og:description" content="תחזית אישית לפי מיקום הירח עכשיו ותאריך הלידה שלכם." />
   <meta property="og:image" content="{{ request.url_root }}media/images/yaron_livne.png" />
+  {% if meta_pixel_id %}
+  <!-- Meta Pixel. autoConfig is off so the Pixel never reads form fields (e-mail, date of birth) -->
+  <script>
+    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+    document,'script','https://connect.facebook.net/en_US/fbevents.js');
+    fbq('set', 'autoConfig', false, {{ meta_pixel_id | tojson }});
+    fbq('init', {{ meta_pixel_id | tojson }});
+    fbq('track', 'PageView');
+  </script>
+  <noscript><img height="1" width="1" style="display:none" alt=""
+    src="https://www.facebook.com/tr?id={{ meta_pixel_id }}&ev=PageView&noscript=1" /></noscript>
+  {% endif %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="icon" href="/static/favicon.ico" sizes="any" />
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
@@ -319,8 +334,15 @@
                  data-ds-required-msg="יש להזין כתובת מייל." aria-describedby="email-error" required />
           <p class="ds-field__error" id="email-error" aria-live="polite"></p>
         </div>
+        <label class="ds-check">
+          <input type="checkbox" id="marketing-consent" name="marketing_consent" />
+          <span>אני מסכים/ה לקבל מירון ליבנה עדכונים והצעות במייל. אפשר לבטל את ההסכמה בכל עת.</span>
+        </label>
         <p class="ds-form__error" role="alert" data-ds-form-error></p>
         <button type="submit" class="ds-btn ds-btn--primary ds-btn--block">לצפייה בתחזית</button>
+        <p class="ds-field__hint">
+          המייל שלכם נשמר אצלנו, ונשלח אליו עדכונים והצעות רק אם סימנתם הסכמה. האתר משתמש בפיקסל של Meta כדי למדוד את ביצועי המודעות, ולכן Meta מקבלת נתוני גלישה, כמו ביקור בעמוד והשארת פרטים. איננו מעבירים ל-Meta את כתובת המייל או את תאריך הלידה שהזנתם.{% if consent_email %} לבקשות מחיקה או לביטול הסכמה: <a href="mailto:{{ consent_email }}" dir="ltr">{{ consent_email }}</a>{% endif %}
+        </p>
       </form>
     </section>
 
@@ -374,7 +396,7 @@
       const wheel = $('wheel');
       const disc = $('wheel-disc');
       const steps = [$('step-dob'), $('step-email'), $('step-result')];
-      const state = { dob: null, sign: null, forecast: null, rotation: 0, introDone: false };
+      const state = { dob: null, sign: null, forecast: null, rotation: 0, introDone: false, leadTracked: false };
 
       function announce(msg) {
         const el = $('live');
@@ -501,6 +523,7 @@
           data = await postJson('/lp/moon/forecast', {
             dob: state.dob,
             email: $('email').value.trim(),
+            marketing_consent: $('marketing-consent').checked,
             tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
           });
         } catch (err) {
@@ -510,6 +533,11 @@
         }
         DS.setBusy(btn, false);
         state.forecast = data;
+        // One lead per visit, with no visitor details: "another date of birth" must not count again
+        if (window.fbq && !state.leadTracked) {
+          state.leadTracked = true;
+          fbq('track', 'Lead');
+        }
 
         $('result-symbol').textContent = data.moon_sign_symbol + '︎';
         $('result-title').textContent = `התחזית שלכם, בני מזל ${data.sun_sign_he}`;

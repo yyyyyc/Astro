@@ -150,6 +150,23 @@ img, video, svg { display: block; max-width: 100%; }
   color: var(--ds-color-text);
 }
 .ds-field__hint { margin: 0; font-size: var(--ds-text-xs); color: var(--ds-color-text-muted); }
+.ds-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-3);
+  min-height: 44px;
+  font-size: var(--ds-text-sm);
+  text-align: start;
+  cursor: pointer;
+}
+.ds-check input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  accent-color: var(--ds-color-gold-strong);
+  cursor: pointer;
+}
 .ds-field__error {
   margin: 0;
   font-size: var(--ds-text-sm);

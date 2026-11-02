@@ -52,3 +52,4 @@ public.tbl_landing_emails
   id         bigint      NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY
   email      text        NOT NULL UNIQUE CHECK (char_length(email) <= 254 AND email = lower(email))
   created_at timestamptz NOT NULL DEFAULT now()
+  marketing_consent boolean NOT NULL DEFAULT false  -- True once the visitor ticks the consent checkbox; send marketing only to these

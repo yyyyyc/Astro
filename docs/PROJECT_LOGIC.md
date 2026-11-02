@@ -111,6 +111,7 @@ On the landing page (`/lp/moon`) the inputs are different:
 |---|---|---|
 | Date of birth | Yes | `dd/mm/yyyy`, typed or picked from a calendar dialog. The field starts filled with the date 30 years before today (the visitor can change it), and the dialog opens on that date if the field was cleared; a real date, from 1900, not in the future |
 | E-mail | Yes | Standard address format, at most 254 characters. Saved in `tbl_landing_emails` (see section 7) |
+| Marketing consent | No | Checkbox, unticked by default. Saved with the e-mail (see section 7) |
 | Date, time, location | Not asked | The current moment is used; the browser's timezone is used only to display times |
 
 - The **progression time cannot be entered**; it is always 12:00 local time. ❓ See section 9.
@@ -207,8 +208,8 @@ to a feature that is still planned.
 1. **Sign step** (`POST /lp/moon/sign`): the date of birth gives the Sun sign (same rule as 5.5, at
    12:00 UTC). The wheel stops on that sign.
 2. **Forecast step** (`POST /lp/moon/forecast`), after the e-mail is validated:
-   - The e-mail is saved in `tbl_landing_emails` (section 7). If saving fails, the visitor still gets the
-     forecast and the failure is logged without the address.
+   - The e-mail and the consent choice are saved in `tbl_landing_emails` (section 7). If saving fails, the
+     visitor still gets the forecast and the failure is logged without the address.
    - The Moon's sign is taken for **the current moment** (server clock). No location is needed, because
      the Moon's sign at a given instant is the same everywhere.
    - **House** and **forecast group** follow exactly the rules of 5.5 (whole-sign houses from the Sun
@@ -262,8 +263,14 @@ Rules:
 - **Forecast texts are read-only.** The site never inserts, updates or deletes them, and stores nothing
   about users' calculations. The date of birth is not stored.
 - **Landing page e-mails are the only data the site writes** ✅. Each valid address is saved once, in lower
-  case, with the time it was first entered, in `tbl_landing_emails`. Nothing is sent to these addresses,
-  and marketing consent is not collected ❌. ❓ See section 9.
+  case, with the time it was first entered, in `tbl_landing_emails`. `marketing_consent` is true only after
+  the visitor ticks the checkbox, and a later submission without the tick does not clear it. Addresses saved
+  before the checkbox existed stay false. The site sends nothing to these addresses. Marketing may be sent only
+  where `marketing_consent` is true. There is no automatic unsubscribe ❌; requests go to the address in
+  `EMAIL_OF_CONSENT`, shown in the page's notice. ❓ See section 9.
+- **Meta Pixel** ✅: when `META_PIXEL_ID` is set, `/lp/moon` loads the Pixel and sends `PageView` on load and
+  `Lead` once per visit after a valid e-mail. Automatic configuration is off, and the e-mail, date of birth and
+  forecast are not sent. No other page has the Pixel.
 - **Access** ✅: all tables have row level security on, and Supabase's public API roles (`anon`,
   `authenticated`) have no access. The site connects with its own database role through `ASTRO_DB_URL`.
 - Database: Supabase PostgreSQL. The connection comes from the `ASTRO_DB_URL` environment variable.
@@ -321,8 +328,9 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 7. **Sun sign from date of birth** is taken at 12:00 UTC. People born on a day the Sun changes sign may
    get the neighbouring sign. Should a birth time be asked for?
 8. **Whole degree by truncation** is used for all forecast lookups; rounding was not chosen. Confirm.
-9. **Landing page e-mails** are stored in `tbl_landing_emails`, but no consent is collected and there is
-   no privacy notice. Is a marketing-consent checkbox needed, and will they go to a mailing service?
+9. **Landing page privacy:** should e-mails without marketing consent be kept, and may the Pixel start before
+   the visitor reads the notice (especially for visitors from Europe)? The wording needs legal review. Will the
+   e-mails go to a mailing service?
 10. **Landing page forecast videos** are a random demo video. How will each forecast (house + group)
     map to its own video, and will the videos have captions?
 
@@ -424,6 +432,7 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 |---|---|---|
 | תאריך לידה | כן | `dd/mm/yyyy`, בהקלדה או בבחירה מחלון לוח שנה. השדה מתחיל כשהוא מלא בתאריך של 30 שנה לפני היום (המבקר יכול לשנות אותו), והחלון נפתח על התאריך הזה אם השדה נמחק; תאריך אמיתי, מ-1900, לא בעתיד |
 | מייל | כן | פורמט כתובת רגיל, עד 254 תווים. נשמר בטבלה `tbl_landing_emails` (ראו סעיף 7) |
+| הסכמה לדיוור | לא | תיבת סימון, לא מסומנת כברירת מחדל. נשמרת עם המייל (ראו סעיף 7) |
 | תאריך, שעה, מיקום | לא נשאלים | נעשה שימוש ברגע הנוכחי; אזור הזמן של הדפדפן משמש רק להצגת השעות |
 
 - **אי אפשר להזין את שעת הפרוגרסיה**; היא תמיד 12:00 בשעון המקומי. ❓ ראו סעיף 9.
@@ -517,8 +526,8 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 1. **שלב המזל** (`POST /lp/moon/sign`): תאריך הלידה נותן את מזל השמש (אותו כלל כמו ב-5.5, ב-12:00
    UTC). הגלגל נעצר על המזל הזה.
 2. **שלב התחזית** (`POST /lp/moon/forecast`), אחרי בדיקת תקינות המייל:
-   - המייל נשמר בטבלה `tbl_landing_emails` (סעיף 7). אם השמירה נכשלת, המבקר עדיין מקבל את התחזית, והכשל
-     נרשם ביומן ללא הכתובת.
+   - המייל ובחירת ההסכמה נשמרים בטבלה `tbl_landing_emails` (סעיף 7). אם השמירה נכשלת, המבקר עדיין מקבל את
+     התחזית, והכשל נרשם ביומן ללא הכתובת.
    - מזל הירח נלקח עבור **הרגע הנוכחי** (שעון השרת). אין צורך במיקום, כי מזל הירח ברגע נתון זהה
      בכל מקום.
    - **הבית** ו**קבוצת התחזית** נקבעים בדיוק לפי הכללים של 5.5 (בתים של מזל שלם ממזל השמש; קבוצה 1
@@ -570,8 +579,13 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 - **טקסטי התחזית לקריאה בלבד.** האתר לעולם אינו מוסיף, מעדכן או מוחק אותם, ואינו שומר דבר על החישובים
   של המשתמשים. תאריך הלידה אינו נשמר.
 - **כתובות המייל מעמוד הנחיתה הן הנתונים היחידים שהאתר כותב** ✅. כל כתובת תקינה נשמרת פעם אחת, באותיות
-  קטנות, עם מועד ההזנה הראשון, בטבלה `tbl_landing_emails`. לא נשלח דבר לכתובות האלה, ולא נאספת הסכמה לדיוור ❌.
-  ❓ ראו סעיף 9.
+  קטנות, עם מועד ההזנה הראשון, בטבלה `tbl_landing_emails`. הערך `marketing_consent` הופך לאמת רק אחרי שהמבקר
+  מסמן את התיבה, ושליחה מאוחרת יותר ללא סימון אינה מבטלת אותו. כתובות שנשמרו לפני שנוספה התיבה נשארות עם הערך
+  שקר. האתר אינו שולח דבר לכתובות האלה. מותר לשלוח דיוור רק כאשר `marketing_consent` הוא אמת. אין הסרה אוטומטית
+  מרשימת הדיוור ❌; בקשות מגיעות לכתובת שב-`EMAIL_OF_CONSENT`, המוצגת בהודעה שבעמוד. ❓ ראו סעיף 9.
+- **הפיקסל של Meta** ✅: כאשר `META_PIXEL_ID` מוגדר, העמוד `/lp/moon` טוען את הפיקסל ושולח `PageView` בטעינה
+  ו-`Lead` פעם אחת בכל ביקור אחרי הזנת מייל תקין. התצורה האוטומטית כבויה, והמייל, תאריך הלידה והתחזית אינם נשלחים.
+  בשאר העמודים אין פיקסל.
 - **גישה** ✅: בכל הטבלאות מופעלת אבטחה ברמת השורה (RLS), ולתפקידי ה-API הציבורי של Supabase ‏(`anon`,
   `authenticated`) אין גישה. האתר מתחבר עם תפקיד מסד הנתונים שלו דרך `ASTRO_DB_URL`.
 - מסד הנתונים: Supabase PostgreSQL. פרטי החיבור נלקחים ממשתנה הסביבה `ASTRO_DB_URL`.
@@ -628,8 +642,8 @@ Yaron's photo and the demo videos (section 5.6). The demo audio files are not us
 7. **מזל השמש לפי תאריך לידה** נלקח ב-12:00 UTC. מי שנולד ביום שבו השמש מחליפה מזל עשוי לקבל את
    המזל הסמוך. האם לבקש גם שעת לידה?
 8. **מעלה שלמה בחיתוך** משמשת בכל שליפות התחזית, ולא עיגול. יש לאשר.
-9. **כתובות מייל בעמוד הנחיתה** נשמרות בטבלה `tbl_landing_emails`, אך לא נאספת הסכמה ואין הודעת פרטיות.
-   האם נדרשת תיבת סימון להסכמה לדיוור, והאם הכתובות יועברו לשירות דיוור?
+9. **פרטיות בעמוד הנחיתה:** האם לשמור כתובות מייל ללא הסכמה לדיוור, והאם מותר להפעיל את הפיקסל לפני שהמבקר קרא
+   את ההודעה (במיוחד עבור מבקרים מאירופה)? הנוסח דורש בדיקה משפטית. האם הכתובות יועברו לשירות דיוור?
 10. **סרטוני התחזית בעמוד הנחיתה** הם סרטון דוגמה אקראי. איך כל תחזית (בית + קבוצה) תמופה לסרטון
     משלה, והאם יהיו לסרטונים כתוביות?
 

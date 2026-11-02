@@ -18,8 +18,8 @@ followed by an optional commit message.
 ## Config (in `.env`, which is gitignored — never commit these)
 
 - `RENDER_SITE_URL` — public URL of the service: `https://tertiary-progression.onrender.com`. Required for verification.
-- `RENDER_SERVICE_ID` — `srv-d8l70apo3t8c73aniiag`. Dashboard (build logs/events):
-  `https://dashboard.render.com/web/srv-d8l70apo3t8c73aniiag` — include this link in the report.
+- `RENDER_SERVICE_ID` — `srv-d9p02dbm8hqs73a1a9tg`. Dashboard (build logs/events):
+  `https://dashboard.render.com/web/srv-d9p02dbm8hqs73a1a9tg` — include this link in the report.
 - `RENDER_DEPLOY_HOOK_URL` — Render dashboard → service → Settings → Deploy Hook. Fired on every deploy (step 7).
   It is a secret: never print it, never put it in a commit or command output.
 
