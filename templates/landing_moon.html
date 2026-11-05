@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>מה הירח צופן לכם? | תחזית אישית</title>
+  {% include "_google_analytics.html" %}
   <meta name="description" content="צפו בסרטון, הזינו את תאריך הלידה שלכם וקבלו תחזית אישית לפי מיקום הירח עכשיו." />
   <meta name="theme-color" content="#0b0620" />
   <meta property="og:type" content="website" />
@@ -343,7 +344,7 @@
         <p class="ds-form__error" role="alert" data-ds-form-error></p>
         <button type="submit" class="ds-btn ds-btn--primary ds-btn--block">לצפייה בתחזית</button>
         <p class="ds-field__hint">
-          המייל שלכם נשמר אצלנו, ונשלח אליו עדכונים והצעות רק אם סימנתם הסכמה. האתר משתמש בפיקסל של Meta כדי למדוד את ביצועי המודעות, ולכן Meta מקבלת נתוני גלישה, כמו ביקור בעמוד והשארת פרטים. איננו מעבירים ל-Meta את כתובת המייל או את תאריך הלידה שהזנתם.{% if consent_email %} לבקשות מחיקה או לביטול הסכמה: <a href="mailto:{{ consent_email }}" dir="ltr">{{ consent_email }}</a>{% endif %}
+          המייל שלכם נשמר אצלנו, ונשלח אליו עדכונים והצעות רק אם סימנתם הסכמה. האתר משתמש בפיקסל של Meta כדי למדוד את ביצועי המודעות, וב-Google Analytics כדי להבין איך משתמשים באתר, ולכן Meta ו-Google מקבלות נתוני גלישה, כמו ביקור בעמוד והשארת פרטים. איננו מעבירים להן את כתובת המייל או את תאריך הלידה שהזנתם.{% if consent_email %} לבקשות מחיקה או לביטול הסכמה: <a href="mailto:{{ consent_email }}" dir="ltr">{{ consent_email }}</a>{% endif %}
         </p>
       </form>
     </section>
@@ -536,9 +537,10 @@
         DS.setBusy(btn, false);
         state.forecast = data;
         // One lead per visit, with no visitor details: "another date of birth" must not count again
-        if (window.fbq && !state.leadTracked) {
+        if (!state.leadTracked) {
           state.leadTracked = true;
-          fbq('track', 'Lead');
+          if (window.fbq) fbq('track', 'Lead');
+          if (window.gtag) gtag('event', 'generate_lead');
         }
 
         $('result-symbol').textContent = data.moon_sign_symbol + '︎';

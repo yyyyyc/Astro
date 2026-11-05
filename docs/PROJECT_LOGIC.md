@@ -271,6 +271,11 @@ Rules:
 - **Meta Pixel** ✅: when `META_PIXEL_ID` is set, `/lp/moon` loads the Pixel and sends `PageView` on load and
   `Lead` once per visit after a valid e-mail. Automatic configuration is off, and the e-mail, date of birth and
   forecast are not sent. No other page has the Pixel.
+- **Google Analytics 4** ✅: when `GA_MEASUREMENT_ID` holds a valid GA4 ID (`G-...`), every page loads the GA
+  tag, which counts page views and Enhanced measurement events (scrolls, outbound clicks and similar). The site
+  also sends `calculate_tertiary`, `calculate_moon_transit` and `calculate_secondary` after a successful
+  calculation, and `generate_lead` on `/lp/moon` once per visit, together with the Pixel's `Lead`. No event
+  carries the e-mail, date of birth, place or results. There is no cookie consent banner ❌; see section 9.
 - **Access** ✅: all tables have row level security on, and Supabase's public API roles (`anon`,
   `authenticated`) have no access. The site connects with its own database role through `ASTRO_DB_URL`.
 - Database: Supabase PostgreSQL. The connection comes from the `ASTRO_DB_URL` environment variable.
@@ -329,8 +334,8 @@ audio files are not used.
 7. **Sun sign from date of birth** is taken at 12:00 UTC. People born on a day the Sun changes sign may
    get the neighbouring sign. Should a birth time be asked for?
 8. **Whole degree by truncation** is used for all forecast lookups; rounding was not chosen. Confirm.
-9. **Landing page privacy:** should e-mails without marketing consent be kept, and may the Pixel start before
-   the visitor reads the notice (especially for visitors from Europe)? The wording needs legal review. Will the
+9. **Landing page privacy:** should e-mails without marketing consent be kept, and may the Pixel and Google
+   Analytics start before the visitor reads the notice or agrees to cookies (especially for visitors from Europe)? The wording needs legal review. Will the
    e-mails go to a mailing service?
 10. **Landing page forecast videos** are a random demo video. How will each forecast (house + group)
     map to its own video, and will the videos have captions?
@@ -587,6 +592,11 @@ audio files are not used.
 - **הפיקסל של Meta** ✅: כאשר `META_PIXEL_ID` מוגדר, העמוד `/lp/moon` טוען את הפיקסל ושולח `PageView` בטעינה
   ו-`Lead` פעם אחת בכל ביקור אחרי הזנת מייל תקין. התצורה האוטומטית כבויה, והמייל, תאריך הלידה והתחזית אינם נשלחים.
   בשאר העמודים אין פיקסל.
+- **Google Analytics 4** ✅: כאשר `GA_MEASUREMENT_ID` מכיל מזהה GA4 תקין (`G-...`), כל עמודי האתר טוענים את תג
+  GA, שסופר צפיות בעמודים ואירועי Enhanced measurement (גלילה, לחיצה על קישורים חיצוניים וכדומה). בנוסף האתר שולח
+  `calculate_tertiary`, `calculate_moon_transit` ו-`calculate_secondary` אחרי חישוב מוצלח, ו-`generate_lead` בעמוד
+  `/lp/moon` פעם אחת בכל ביקור, יחד עם `Lead` של הפיקסל. אף אירוע אינו כולל את המייל, תאריך הלידה, המקום או
+  התוצאות. אין באנר הסכמה לעוגיות ❌; ראו סעיף 9.
 - **גישה** ✅: בכל הטבלאות מופעלת אבטחה ברמת השורה (RLS), ולתפקידי ה-API הציבורי של Supabase ‏(`anon`,
   `authenticated`) אין גישה. האתר מתחבר עם תפקיד מסד הנתונים שלו דרך `ASTRO_DB_URL`.
 - מסד הנתונים: Supabase PostgreSQL. פרטי החיבור נלקחים ממשתנה הסביבה `ASTRO_DB_URL`.
@@ -644,8 +654,8 @@ audio files are not used.
 7. **מזל השמש לפי תאריך לידה** נלקח ב-12:00 UTC. מי שנולד ביום שבו השמש מחליפה מזל עשוי לקבל את
    המזל הסמוך. האם לבקש גם שעת לידה?
 8. **מעלה שלמה בחיתוך** משמשת בכל שליפות התחזית, ולא עיגול. יש לאשר.
-9. **פרטיות בעמוד הנחיתה:** האם לשמור כתובות מייל ללא הסכמה לדיוור, והאם מותר להפעיל את הפיקסל לפני שהמבקר קרא
-   את ההודעה (במיוחד עבור מבקרים מאירופה)? הנוסח דורש בדיקה משפטית. האם הכתובות יועברו לשירות דיוור?
+9. **פרטיות בעמוד הנחיתה:** האם לשמור כתובות מייל ללא הסכמה לדיוור, והאם מותר להפעיל את הפיקסל ואת Google
+   Analytics לפני שהמבקר קרא את ההודעה או הסכים לעוגיות (במיוחד עבור מבקרים מאירופה)? הנוסח דורש בדיקה משפטית. האם הכתובות יועברו לשירות דיוור?
 10. **סרטוני התחזית בעמוד הנחיתה** הם סרטון דוגמה אקראי. איך כל תחזית (בית + קבוצה) תמופה לסרטון
     משלה, והאם יהיו לסרטונים כתוביות?
 

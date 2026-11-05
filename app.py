@@ -17,6 +17,15 @@ load_dotenv(override=True)
 
 app = Flask(__name__)
 
+GA_MEASUREMENT_ID_RE = re.compile(r"^G-[A-Z0-9]+$")
+
+
+@app.context_processor
+def inject_google_analytics():
+    """Every page loads Google Analytics when GA_MEASUREMENT_ID holds a valid GA4 ID."""
+    ga_id = os.environ.get("GA_MEASUREMENT_ID", "").strip()
+    return {"ga_measurement_id": ga_id if GA_MEASUREMENT_ID_RE.match(ga_id) else None}
+
 ZODIAC_SIGNS = [
     "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
     "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",

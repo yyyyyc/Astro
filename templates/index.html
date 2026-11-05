@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tertiary Progression Calculator</title>
+  {% include "_google_analytics.html" %}
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="icon" href="/static/favicon.ico" sizes="any" />
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
@@ -516,6 +517,7 @@
       const data = await r.json();
       if (!r.ok) { showError(data.error || 'Calculation failed.'); return; }
       renderResults(data);
+      if (window.gtag) gtag('event', 'calculate_tertiary');
     } catch (err) {
       showError('Network error: ' + err.message);
     } finally {
