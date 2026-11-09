@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Test Recipients — Admin</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0f0f1e; color: #e0e0f0; margin: 0; padding: 1.5rem; }
+    h1 { color: #a78bfa; margin-top: 0; }
+    h2 { color: #a78bfa; margin-top: 2.5rem; font-size: 1.2rem; }
+    a { color: #7c6fcd; }
+    .msg { background: #2e2e5e; border-left: 4px solid #a78bfa; padding: 0.6rem 1rem; margin-bottom: 1rem; border-radius: 4px; }
+    .warn { background: #4a3a10; border-left-color: #f0b429; }
+    .card { background: #16162e; border: 1px solid #2e2e5e; border-radius: 8px; padding: 1rem 1.2rem; }
+    form.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 1.3rem 1rem; align-items: end; }
+    label { display: block; font-size: 0.8rem; color: #a0a0c8; margin-bottom: 0.2rem; }
+    input[type=text], input[type=email], input[type=date], select {
+      width: 100%; padding: 0.45rem 0.55rem; background: #0f0f1e; color: #e0e0f0;
+      border: 1px solid #3a3a6e; border-radius: 4px; font-size: 0.9rem; color-scheme: dark; }
+    input:focus, select:focus { border-color: #a78bfa; outline: none; }
+    .date-field { position: relative; }
+    .date-field input[type=text] { padding-right: 2.2rem; }
+    .date-field input[type=text].has-sign { padding-right: 8rem; }
+    .sign-badge {
+      position: absolute; right: 2.2rem; top: 50%; transform: translateY(-50%);
+      font-size: 0.85rem; color: #c4b5fd; white-space: nowrap; user-select: none; }
+    .sign-badge .glyph { font-size: 1.1rem; vertical-align: -0.1em; }
+    .date-icon {
+      position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%);
+      font-size: 1rem; color: #a0a0c8; cursor: pointer; user-select: none; }
+    input[type=time] {
+      width: 100%; padding: 0.45rem 0.55rem; background: #0f0f1e; color: #e0e0f0;
+      border: 1px solid #3a3a6e; border-radius: 4px; font-size: 0.9rem; color-scheme: dark; }
+    .autocomplete-wrap { position: relative; }
+    .autocomplete-drop {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 100;
+      background: #16162e; border: 1px solid #3a3a6e; border-radius: 6px;
+      max-height: 220px; overflow-y: auto; display: none; }
+    .autocomplete-drop.open { display: block; }
+    .ac-item { padding: 0.5rem 0.75rem; font-size: 0.85rem; cursor: pointer; border-bottom: 1px solid #2e2e5e; line-height: 1.4; }
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover { background: #2e2e5e; }
+    /* Out of the layout, so the place input lines up with the other inputs (the grid aligns cells at the bottom). */
+    .place-field { position: relative; }
+    .place-hint { position: absolute; left: 0; right: 0; top: 100%; margin-top: 0.15rem;
+      font-size: 0.72rem; color: #a0a0c8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sub { color: #a0a0c8; font-size: 0.8rem; }
+    input.date-picker-trigger {
+      position: absolute; right: 0; top: 0; width: 0; height: 0;
+      opacity: 0; pointer-events: none; padding: 0; border: none; }
+    .days label, .checks label { display: inline-flex; gap: 0.25rem; align-items: center; margin-right: 0.6rem; color: #e0e0f0; font-size: 0.85rem; }
+    .wide { grid-column: 1 / -1; }
+    button { background: #7c6fcd; color: #fff; border: 0; border-radius: 4px; padding: 0.45rem 0.9rem; cursor: pointer; font-size: 0.85rem; }
+    button.secondary { background: #2e2e5e; }
+    button.danger { background: #8b2e3e; }
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+    th { text-align: left; color: #a78bfa; padding: 0.5rem 0.6rem; border-bottom: 2px solid #2e2e5e; white-space: nowrap; }
+    td { padding: 0.5rem 0.6rem; border-bottom: 1px solid #2e2e5e; vertical-align: top; }
+    td.nowrap { white-space: nowrap; }
+    /* One line, cut with "…"; the full value is in the cell's tooltip (title). */
+    td.truncate { max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+    tr.inactive td { opacity: 0.5; }
+    .actions { display: flex; gap: 0.3rem; flex-wrap: nowrap; }
+    /* Recipients table: compact so it fits without horizontal scrolling. */
+    table.compact { font-size: 0.8rem; }
+    table.compact th, table.compact td { padding: 0.45rem 0.35rem; }
+    table.compact th { font-size: 0.78rem; }
+    table.compact .actions button { padding: 0.35rem 0.55rem; font-size: 0.78rem; }
+    td.truncate.email { max-width: 150px; }
+    td.truncate.place { max-width: 120px; }
+    td.truncate.tz { max-width: 95px; }
+    td.truncate.days { max-width: 85px; }
+    .actions form { margin: 0; }
+    .status-sent { color: #4ade80; }
+    .status-failed { color: #f87171; }
+    .status-dry_run { color: #f0b429; }
+    .err { color: #f87171; max-width: 320px; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <h1>&#9790; Test e-mail recipients</h1>
+
+  {% if msg %}<div class="msg">{{ msg }}</div>{% endif %}
+  {% if dry_run %}<div class="msg warn">EMAIL_DRY_RUN is on: e-mails are logged as "dry_run" and not actually sent.</div>{% endif %}
+
+  {% set day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}
+
+  <div class="card">
+    <h2 id="form-title" style="margin-top:0">Add recipient</h2>
+    <form class="grid" id="recipient-form" method="post" action="{{ url_for('admin_save_recipient') }}">
+      <input type="hidden" name="id" id="f-id">
+      <div><label for="f-email">E-mail *</label><input type="email" name="email" id="f-email" required></div>
+      <div><label for="f-first">First name</label><input type="text" name="first_name" id="f-first"></div>
+      <div><label for="f-last">Last name</label><input type="text" name="last_name" id="f-last"></div>
+      <div><label for="f-dob">Date of birth *</label>
+        <div class="date-field">
+          <input type="text" name="dob" id="f-dob" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10" required>
+          <span class="sign-badge" role="img" hidden></span>
+          <span class="date-icon" aria-hidden="true">&#128197;</span>
+          <input type="date" id="f-dob_picker" class="date-picker-trigger" tabindex="-1" aria-label="Pick date of birth">
+        </div>
+      </div>
+      <div><label for="f-btime">Time of birth (local)</label><input type="time" name="birth_time" id="f-btime" value="12:00"></div>
+      <div class="place-field"><label for="f-place">Place of birth</label>
+        <div class="autocomplete-wrap">
+          <input type="text" name="birth_place" id="f-place" placeholder="Start typing a city…" autocomplete="off">
+          <div class="autocomplete-drop" id="f-place-drop"></div>
+        </div>
+        <input type="hidden" name="birth_lat" id="f-lat">
+        <input type="hidden" name="birth_lon" id="f-lon">
+        <div class="place-hint" id="f-place-hint"></div>
+      </div>
+      <div><label for="f-tz">Timezone</label>
+        <select name="timezone" id="f-tz">
+          {% for region, zones in timezone_groups %}
+            <optgroup label="{{ region }}">
+              {% for z in zones %}<option value="{{ z.name }}"{% if z.name == default_tz %} selected{% endif %}>{{ z.label }}</option>{% endfor %}
+            </optgroup>
+          {% endfor %}
+        </select>
+      </div>
+      <div><label for="f-times">Run times (local, HH:MM, comma separated) *</label><input type="text" name="run_times" id="f-times" placeholder="08:00, 20:00" required></div>
+      <div><label for="f-lang">Language</label>
+        <select name="language" id="f-lang"><option value="he">Hebrew (he)</option><option value="en">English (en)</option></select></div>
+      <div class="wide days"><label>Run days *</label>
+        {% for d in range(1, 8) %}<label><input type="checkbox" name="run_days" value="{{ d }}" checked> {{ day_names[d - 1] }}</label>{% endfor %}
+      </div>
+      <div class="wide checks">
+        <label><input type="checkbox" name="marketing_consent" id="f-consent"> Marketing consent</label>
+        <label><input type="checkbox" name="active" id="f-active" checked> Active</label>
+      </div>
+      <div class="wide">
+        <button type="submit" id="f-submit">Add</button>
+        <button type="button" class="secondary" id="f-cancel" hidden>Cancel edit</button>
+      </div>
+    </form>
+  </div>
+
+  <h2>Recipients ({{ recipients|length }})</h2>
+  <div class="table-wrap">
+    <p class="sub" style="margin:-0.5rem 0 0.5rem">Last run and Created are in UTC. Hover over a cut-off value to see all of it.</p>
+    <table class="compact">
+      <thead><tr>
+        <th>ID</th><th>E-mail</th><th>Name</th><th>Birth</th><th>Place of birth</th><th>Timezone</th><th>Times</th><th>Days</th>
+        <th>Last run</th><th>Forecast</th><th>Lang</th><th title="Marketing consent">Consent</th><th>Active</th><th>Created</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for r in recipients %}
+        {% set times = r.times %}
+        <tr class="{{ '' if r.active else 'inactive' }}">
+          <td>{{ r.id }}</td>
+          <td class="truncate email" title="{{ r.email }}">{{ r.email }}</td>
+          <td>{{ r.first_name or '' }} {{ r.last_name or '' }}</td>
+          <td class="nowrap">{{ r.dob.strftime('%d/%m/%Y') }} {{ r.birth_time_hm }}<br>
+            <span title="{{ r.sign }}" style="color:#c4b5fd">{{ r.sign_symbol }}&#xFE0E; {{ r.sign }}</span></td>
+          {% if r.birth_place %}
+          {% set coords = '%.4f, %.4f'|format(r.birth_lat, r.birth_lon) %}
+          <td class="truncate place" title="{{ r.birth_place }} ({{ coords }})">{{ r.birth_place }}<br><span class="sub">{{ coords }}</span></td>
+          {% else %}<td>—</td>{% endif %}
+          <td class="truncate tz" title="{{ r.timezone }}">{{ r.timezone }}</td>
+          <td>{{ times | join(', ') }}</td>
+          {% set ns = namespace(days=[]) %}
+          {% for d in r.run_days %}{% set ns.days = ns.days + [day_names[d - 1]] %}{% endfor %}
+          {% set days_text = ns.days | join(', ') %}
+          <td class="truncate days" title="{{ days_text }}">{{ days_text }}</td>
+          <td class="nowrap">{% if r.last_run %}{{ r.last_run.strftime('%d/%m/%Y') }}<br>{{ r.last_run.strftime('%H:%M') }}{% else %}—{% endif %}</td>
+          <td title="{{ r.forecast_type }}">{{ 'Moon' if r.forecast_type == 'moon_transit' else r.forecast_type }}</td>
+          <td>{{ r.language }}</td>
+          <td>{{ 'Yes' if r.marketing_consent else 'No' }}</td>
+          <td>{{ 'Yes' if r.active else 'No' }}</td>
+          <td class="nowrap">{{ r.created_at.strftime('%d/%m/%Y') }}<br>{{ r.created_at.strftime('%H:%M') }}</td>
+          <td><div class="actions">
+            <button type="button" class="secondary edit-btn"
+              data-id="{{ r.id }}" data-email="{{ r.email }}" data-first="{{ r.first_name or '' }}"
+              data-last="{{ r.last_name or '' }}" data-dob="{{ r.dob.strftime('%d/%m/%Y') }}" data-btime="{{ r.birth_time_hm }}"
+              data-place="{{ r.birth_place or '' }}" data-lat="{{ r.birth_lat if r.birth_lat is not none else '' }}"
+              data-lon="{{ r.birth_lon if r.birth_lon is not none else '' }}" data-tz="{{ r.timezone }}"
+              data-times="{{ times | join(', ') }}" data-days="{{ r.run_days | join(',') }}"
+              data-lang="{{ r.language }}" data-consent="{{ 1 if r.marketing_consent else 0 }}"
+              data-active="{{ 1 if r.active else 0 }}">Edit</button>
+            <form method="post" action="{{ url_for('admin_send_now', rid=r.id) }}" data-email="{{ r.email }}"
+                  onsubmit="return confirm('Send the current forecast to ' + this.dataset.email + ' now?')">
+              <button type="submit" title="Send the current forecast now">Send</button></form>
+            <form method="post" action="{{ url_for('admin_delete_recipient', rid=r.id) }}" data-email="{{ r.email }}"
+                  onsubmit="return confirm('Delete ' + this.dataset.email + '?')">
+              <button type="submit" class="danger">Delete</button></form>
+          </div></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="15">No recipients yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Send log (latest {{ log_limit }})</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>ID</th><th>Sent at (UTC)</th><th>Recipient</th><th>Trigger</th><th>Scheduled for (UTC)</th><th>Status</th>
+        <th>Moon sign</th><th>House</th><th>Group</th><th>Subject</th><th>Message ID</th><th>Error</th>
+      </tr></thead>
+      <tbody>
+      {% for l in logs %}
+        <tr>
+          <td>{{ l.id }}</td>
+          <td class="nowrap">{{ l.sent_at.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+          <td>{{ l.email }}{% if l.recipient_id %} <span style="color:#777">#{{ l.recipient_id }}</span>{% endif %}</td>
+          <td>{{ l.trigger }}</td>
+          <td class="nowrap">{{ l.scheduled_for.strftime('%d/%m/%Y %H:%M') if l.scheduled_for else '—' }}</td>
+          <td class="status-{{ l.status }}">{{ l.status }}</td>
+          <td>{{ l.moon_sign or '' }}</td>
+          <td>{{ l.house or '' }}</td>
+          <td>{{ l.forecast_group or '' }}</td>
+          <td>{{ l.subject or '' }}</td>
+          <td>{{ l.provider_message_id or '' }}</td>
+          <td class="err">{{ l.error or '' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="12">Nothing has been sent yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top:1.5rem"><a href="/">&#8592; Back to the site</a></p>
+
+  <script>
+    const form = document.getElementById('recipient-form');
+    const $ = id => document.getElementById(id);
+
+    // ── dd/mm/yyyy date of birth with calendar picker and Sun-sign badge (as on the other pages) ──
+    const dobText = $('f-dob'), dobPicker = $('f-dob_picker');
+    const badge = dobText.closest('.date-field').querySelector('.sign-badge');
+    const dmyToIso = s => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s.trim()); return m ? `${m[3]}-${m[2]}-${m[1]}` : null; };
+    let signSeq = 0;
+    function hideSign() { badge.hidden = true; dobText.classList.remove('has-sign'); }
+    async function updateSign() {
+      const my = ++signSeq, iso = dmyToIso(dobText.value);
+      dobPicker.value = iso || '';
+      if (!iso) { hideSign(); return; }
+      try {
+        const data = await (await fetch(`/sun-sign?date=${iso}`)).json();
+        if (my !== signSeq) return;  // a newer date was entered meanwhile
+        if (!data.sign) { hideSign(); return; }
+        badge.replaceChildren();
+        const glyph = document.createElement('span');
+        glyph.className = 'glyph';
+        glyph.textContent = data.symbol + String.fromCharCode(0xFE0E);  // text glyph, not emoji
+        badge.append(glyph, ' ' + data.sign);
+        badge.setAttribute('aria-label', `Sun sign: ${data.sign}`);
+        badge.hidden = false;
+        dobText.classList.add('has-sign');
+      } catch (e) { if (my === signSeq) hideSign(); }
+    }
+    dobText.addEventListener('input', () => {
+      const digits = dobText.value.replace(/\D/g, '').slice(0, 8);
+      dobText.value = digits.length > 4 ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+                    : digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits;
+      updateSign();
+    });
+    dobText.closest('.date-field').querySelector('.date-icon').addEventListener('click', () => {
+      try { dobPicker.showPicker(); } catch (e) { dobPicker.focus(); }
+    });
+    dobPicker.addEventListener('change', () => {
+      if (!dobPicker.value) return;
+      const [y, mo, d] = dobPicker.value.split('-');
+      dobText.value = `${d}/${mo}/${y}`;
+      updateSign();
+    });
+
+    // ── Place of birth: search list (same /geocode lookup as the other pages) ──
+    const placeInput = $('f-place'), placeDrop = $('f-place-drop'), placeHint = $('f-place-hint');
+    let placeTimer = null, placeSeq = 0;
+    function setPlace(name, lat, lon) {
+      placeInput.value = name || '';
+      $('f-lat').value = lat ?? ''; $('f-lon').value = lon ?? '';
+      placeHint.textContent = name && lat !== '' && lat != null
+        ? `lat ${Number(lat).toFixed(4)}  lon ${Number(lon).toFixed(4)}` : '';
+    }
+    function closePlaces() { placeDrop.classList.remove('open'); }
+    placeInput.addEventListener('input', () => {
+      $('f-lat').value = ''; $('f-lon').value = '';  // typed text is no longer the selected place
+      placeHint.textContent = placeInput.value.trim() ? 'Select a place from the list' : '';
+      clearTimeout(placeTimer);
+      const q = placeInput.value.trim();
+      if (q.length < 2) { closePlaces(); return; }
+      placeTimer = setTimeout(async () => {
+        const my = ++placeSeq;
+        try {
+          const items = await (await fetch(`/geocode?q=${encodeURIComponent(q)}`)).json();
+          if (my !== placeSeq || !Array.isArray(items) || !items.length) { closePlaces(); return; }
+          placeDrop.replaceChildren(...items.map(item => {
+            const div = document.createElement('div');
+            div.className = 'ac-item';
+            div.textContent = item.name;
+            div.addEventListener('mousedown', () => { setPlace(item.name, item.lat, item.lon); closePlaces(); });
+            return div;
+          }));
+          placeDrop.classList.add('open');
+        } catch (e) { closePlaces(); }
+      }, 320);
+    });
+    placeInput.addEventListener('blur', () => setTimeout(closePlaces, 180));
+    form.addEventListener('submit', e => {
+      if (placeInput.value.trim() && !$('f-lat').value) {
+        e.preventDefault();
+        placeHint.textContent = 'Select a place from the list (or clear the field)';
+        placeInput.focus();
+      }
+    });
+
+    function setTimezone(name) {
+      const sel = $('f-tz');
+      if (![...sel.options].some(o => o.value === name)) sel.add(new Option(name, name));  // non-listed zone
+      sel.value = name;
+    }
+
+    function setDays(days) {
+      form.querySelectorAll('input[name=run_days]').forEach(cb => { cb.checked = days.includes(cb.value); });
+    }
+    document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', () => {
+      const d = btn.dataset;
+      $('f-id').value = d.id; $('f-email').value = d.email; $('f-first').value = d.first;
+      $('f-last').value = d.last; $('f-dob').value = d.dob; setTimezone(d.tz); updateSign();
+      $('f-btime').value = d.btime; setPlace(d.place, d.lat, d.lon);
+      $('f-times').value = d.times; $('f-lang').value = d.lang;
+      $('f-consent').checked = d.consent === '1'; $('f-active').checked = d.active === '1';
+      setDays(d.days.split(','));
+      $('form-title').textContent = 'Edit recipient #' + d.id;
+      $('f-submit').textContent = 'Save'; $('f-cancel').hidden = false;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }));
+    $('f-cancel').addEventListener('click', () => {
+      form.reset(); $('f-id').value = ''; updateSign(); setPlace('', '', '');
+      $('form-title').textContent = 'Add recipient';
+      $('f-submit').textContent = 'Add'; $('f-cancel').hidden = true;
+    });
+  </script>
+</body>
+</html>

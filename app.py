@@ -1,4 +1,6 @@
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, Response, redirect, url_for
+import hmac
+from urllib.parse import urlparse
 import ephem
 import math
 from datetime import datetime, timedelta
@@ -742,6 +744,20 @@ def moon_transit_forecast():
     )
 
 
+def moon_transit_for_dob(dob, now_utc):
+    """Moon of Transit for a date of birth at now_utc: the Moon's period, the Sun sign, the house of the
+    Moon counted from the Sun sign (whole signs) and the forecast group. Location is not needed: the
+    Moon's sign at a moment is the same everywhere; a timezone only formats the times."""
+    period = moon_period_at(now_utc)
+    sun_sign = sun_sign_on(dob)
+    return {
+        "period": period,
+        "sun_sign": sun_sign,
+        "house": (ZODIAC_SIGNS.index(period["sign"]) - ZODIAC_SIGNS.index(sun_sign)) % 12 + 1,
+        "group": moon_forecast_group(now_utc, period["start"], period["end"]),
+    }
+
+
 def fetch_moon_transit_forecast(house, group):
     """Moon of Transit forecast text for a house (1-12) and forecast group, or None if there is none.
     Raises RuntimeError when the database is not configured or the query fails."""
@@ -857,12 +873,8 @@ def landing_moon_forecast():
     tz_name = data.get("tz") if data.get("tz") in pytz.all_timezones_set else LANDING_DEFAULT_TZ
     local_tz = pytz.timezone(tz_name)
 
-    # The Moon's sign right now does not depend on location; the timezone only formats the times.
-    now_utc = datetime.now(pytz.utc)
-    period = moon_period_at(now_utc)
-    sun_sign = sun_sign_on(dob)
-    house = (ZODIAC_SIGNS.index(period["sign"]) - ZODIAC_SIGNS.index(sun_sign)) % 12 + 1
-    group = moon_forecast_group(now_utc, period["start"], period["end"])
+    now = moon_transit_for_dob(dob, datetime.now(pytz.utc))
+    period, sun_sign, house, group = now["period"], now["sun_sign"], now["house"], now["group"]
 
     try:
         forecast_text = fetch_moon_transit_forecast(house, group)
@@ -935,6 +947,209 @@ def signs():
   <p style="margin-top:1.5rem"><a href="/">&#8592; Back to calculator</a></p>
 </body>
 </html>"""
+
+
+# ── Admin: test e-mail recipients and send log ───────────────────────────────
+# Protected by HTTP Basic auth: user ADMIN_USER (default "admin"), password ADMIN_PASSWORD.
+# Without ADMIN_PASSWORD the admin pages are disabled.
+ADMIN_LANGUAGES = ("he", "en")
+ADMIN_LOG_LIMIT = 200
+TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
+
+
+@app.before_request
+def protect_admin():
+    if not request.path.startswith("/admin"):
+        return None
+    password = os.environ.get("ADMIN_PASSWORD", "")
+    if not password:
+        return Response("Admin is disabled: ADMIN_PASSWORD is not set.", 503)
+    auth = request.authorization
+    user_ok = auth is not None and hmac.compare_digest(auth.username or "", os.environ.get("ADMIN_USER", "admin"))
+    pass_ok = auth is not None and hmac.compare_digest(auth.password or "", password)
+    if not (user_ok and pass_ok):
+        return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="Astro admin"'})
+    # Browsers resend Basic credentials automatically, so reject form posts coming from other sites.
+    if request.method == "POST":
+        origin = request.headers.get("Origin") or request.headers.get("Referer") or ""
+        if urlparse(origin).netloc != request.host:
+            return Response("Cross-site request rejected", 403)
+    return None
+
+
+def admin_timezone_groups():
+    """All common IANA timezones grouped by region, each with its current UTC offset, for the select box."""
+    now_utc = datetime.now(pytz.utc)
+    groups = {}
+    for name in pytz.common_timezones:
+        offset = now_utc.astimezone(pytz.timezone(name)).strftime("%z")
+        region = name.split("/", 1)[0] if "/" in name else "Other"
+        groups.setdefault(region, []).append(
+            {"name": name, "label": f"{name.replace('_', ' ')} (UTC{offset[:3]}:{offset[3:]})"}
+        )
+    return sorted(groups.items())
+
+
+def admin_redirect(msg):
+    return redirect(url_for("admin_recipients", msg=msg))
+
+
+def parse_recipient_form(form):
+    """Validate the recipient form; returns (values, error)."""
+    email = form.get("email", "").strip().lower()
+    if len(email) > 254 or not EMAIL_RE.match(email):
+        return None, "Invalid e-mail"
+    try:
+        dob = datetime.strptime(form.get("dob", "").strip(), "%d/%m/%Y").date()
+    except ValueError:
+        return None, "Invalid date of birth (use dd/mm/yyyy)"
+    if not datetime(1900, 1, 1).date() <= dob <= datetime.now().date():
+        return None, "Date of birth must be between 1900 and today"
+    birth_time = TIME_RE.match(form.get("birth_time", "").strip() or "12:00")
+    if not birth_time:
+        return None, "Invalid birth time (use HH:MM)"
+    birth_place = form.get("birth_place", "").strip()[:300] or None
+    birth_lat = birth_lon = None
+    if birth_place:
+        try:
+            birth_lat, birth_lon = float(form.get("birth_lat", "")), float(form.get("birth_lon", ""))
+        except ValueError:
+            return None, "Please select the place of birth from the list"
+        if not (-90 <= birth_lat <= 90 and -180 <= birth_lon <= 180):
+            return None, "Please select the place of birth from the list"
+    tz_name = form.get("timezone", "").strip() or LANDING_DEFAULT_TZ
+    if tz_name not in pytz.all_timezones_set:
+        return None, f"Unknown timezone: {tz_name}"
+    times = []
+    for part in re.split(r"[,\s]+", form.get("run_times", "").strip()):
+        if not part:
+            continue
+        m = TIME_RE.match(part)
+        if not m:
+            return None, f"Invalid run time: {part} (use HH:MM)"
+        times.append(f"{int(m.group(1)):02d}:{m.group(2)}")
+    if not times:
+        return None, "Enter at least one run time"
+    days = sorted({int(d) for d in form.getlist("run_days") if d.isdigit() and 1 <= int(d) <= 7})
+    if not days:
+        return None, "Choose at least one run day"
+    language = form.get("language", "he")
+    if language not in ADMIN_LANGUAGES:
+        return None, "Invalid language"
+    return {
+        "email": email,
+        "first_name": form.get("first_name", "").strip() or None,
+        "last_name": form.get("last_name", "").strip() or None,
+        "dob": dob,
+        "birth_time": f"{int(birth_time.group(1)):02d}:{birth_time.group(2)}",
+        "birth_place": birth_place,
+        "birth_lat": birth_lat,
+        "birth_lon": birth_lon,
+        "timezone": tz_name,
+        "run_times": sorted(set(times)),
+        "run_days": days,
+        "language": language,
+        "marketing_consent": form.get("marketing_consent") == "on",
+        "active": form.get("active") == "on",
+    }, None
+
+
+@app.route("/admin/recipients")
+def admin_recipients():
+    engine = get_engine()
+    if engine is None:
+        return "ASTRO_DB_URL environment variable is not set.", 500
+    with engine.connect() as conn:
+        recipients = []
+        for r in conn.execute(text("SELECT * FROM tbl_test_recipients ORDER BY id")):
+            sign = sun_sign_on(r.dob)
+            recipients.append(dict(
+                r._mapping,
+                times=[t.strftime("%H:%M") for t in r.run_times],
+                birth_time_hm=r.birth_time.strftime("%H:%M"),
+                sign=sign,
+                sign_symbol=ZODIAC_SYMBOLS[sign],
+            ))
+        logs = conn.execute(
+            text("SELECT * FROM tbl_test_email_log ORDER BY sent_at DESC LIMIT :n"), {"n": ADMIN_LOG_LIMIT}
+        ).fetchall()
+    return render_template(
+        "admin_recipients.html",
+        recipients=recipients,
+        logs=logs,
+        msg=request.args.get("msg"),
+        log_limit=ADMIN_LOG_LIMIT,
+        default_tz=LANDING_DEFAULT_TZ,
+        timezone_groups=admin_timezone_groups(),
+        dry_run=os.environ.get("EMAIL_DRY_RUN", "").strip().lower() in ("1", "true", "yes"),
+    )
+
+
+@app.route("/admin/recipients/save", methods=["POST"])
+def admin_save_recipient():
+    values, error = parse_recipient_form(request.form)
+    if error:
+        return admin_redirect(error)
+    rid = request.form.get("id", "").strip()
+    params = dict(values, run_times="{" + ",".join(values["run_times"]) + "}")
+    try:
+        with get_engine().begin() as conn:
+            if rid:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE tbl_test_recipients SET email = :email, first_name = :first_name,
+                            last_name = :last_name, dob = :dob, birth_time = CAST(:birth_time AS time),
+                            birth_place = :birth_place, birth_lat = :birth_lat, birth_lon = :birth_lon,
+                            timezone = :timezone,
+                            run_times = CAST(:run_times AS time[]), run_days = CAST(:run_days AS smallint[]),
+                            language = :language, marketing_consent = :marketing_consent, active = :active
+                        WHERE id = :id
+                        """
+                    ),
+                    dict(params, id=int(rid)),
+                )
+            else:
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO tbl_test_recipients (email, first_name, last_name, dob, birth_time,
+                            birth_place, birth_lat, birth_lon, timezone,
+                            run_times, run_days, language, marketing_consent, active)
+                        VALUES (:email, :first_name, :last_name, :dob, CAST(:birth_time AS time),
+                            :birth_place, :birth_lat, :birth_lon, :timezone,
+                            CAST(:run_times AS time[]), CAST(:run_days AS smallint[]),
+                            :language, :marketing_consent, :active)
+                        """
+                    ),
+                    params,
+                )
+    except Exception as exc:
+        if "unique" in str(exc).lower():
+            return admin_redirect("This e-mail already exists")
+        app.logger.error("Could not save recipient: %s", type(exc).__name__)
+        return admin_redirect("Could not save the recipient")
+    return admin_redirect("Recipient updated" if rid else "Recipient added")
+
+
+@app.route("/admin/recipients/<int:rid>/delete", methods=["POST"])
+def admin_delete_recipient(rid):
+    with get_engine().begin() as conn:
+        conn.execute(text("DELETE FROM tbl_test_recipients WHERE id = :id"), {"id": rid})
+    return admin_redirect("Recipient deleted (its log rows are kept)")
+
+
+@app.route("/admin/recipients/<int:rid>/send", methods=["POST"])
+def admin_send_now(rid):
+    """Send the current forecast to one recipient right away. Does not change last_run or the schedule."""
+    import send_emails  # imported here: send_emails imports this module
+
+    engine = get_engine()
+    rows = send_emails.fetch_recipients(engine, rid)
+    if not rows:
+        return admin_redirect("Recipient not found")
+    status = send_emails.deliver(engine, rows[0], "manual", None, send_emails.env_dry_run())
+    return admin_redirect(f"Send now: {status}")
 
 
 if __name__ == "__main__":

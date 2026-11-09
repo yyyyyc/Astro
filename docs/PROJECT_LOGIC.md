@@ -30,8 +30,10 @@ It answers four questions, plus a Hebrew landing page for ad campaigns:
 | Secondary Progression | Secondary Progression page | Where is my secondary-progressed (day-for-a-year) Moon on a given date? | ✅ |
 | Moon of Transit | Moon of Transit page | Which sign is the real Moon in right now, when does it move on, and what does that mean for me? | ✅ |
 | Moon of Transit (landing) | `/lp/moon` | Same as Moon of Transit, as a short guided funnel in Hebrew for visitors from ads (e.g. Facebook) | ✅ |
+| Scheduled e-mails (test) | Render Cron Job + `/admin/recipients` | Sends the current Moon of Transit forecast by e-mail to test recipients on the days and times they chose | ✅ |
 
-The site is **free and open**. There are no user accounts, logins or payments (see section 8).
+The site is **free and open**. There are no user accounts or payments (see section 8). The only login is the
+password-protected admin page (2.5).
 
 ## 2. User workflows
 
@@ -92,6 +94,27 @@ also links to it with the **✦ Landing Page** button.
 6. The forecast **text is not shown automatically**. The button **הצגת התחזית בטקסט** (Show the forecast
    as text) opens it in a pop-up window.
 7. **בדיקה לתאריך לידה אחר** (Try another date of birth) returns to step 2.
+
+### 2.5 Test e-mail recipients admin (`/admin/recipients`) ✅
+
+An English page for the site owner, used to test scheduled e-mails (5.7). It is protected by HTTP Basic
+login: user `ADMIN_USER` (default `admin`) and password `ADMIN_PASSWORD`. Without `ADMIN_PASSWORD` the page
+is disabled. The main page links to it with the **⚙ Admin** button (visitors without the password get the
+login prompt). The page asks search engines not to index it.
+
+1. **Add or edit** a recipient: e-mail, first and last name, date of birth, time of birth (local, default
+   12:00), place of birth (optional, chosen from the same place search as the other pages), timezone, run times (local
+   `HH:MM`, comma separated), run days (Mon–Sun), language (`he`/`en`), marketing consent and active.
+   The date of birth is typed as `dd/mm/yyyy` or picked from a calendar, like on the other pages, and the Sun
+   sign appears next to it. The timezone is chosen from a list of all timezones, grouped by region, with their
+   current UTC offset. The recipients table shows each date and time of birth with its Sun sign, and the place of
+   birth with its coordinates. The time and place of birth are stored for future forecast types; the e-mails do
+   not use them yet (the Sun sign is still taken at 12:00 UTC, as on the landing page).
+2. **Send** sends the current forecast to one recipient immediately. It is logged with trigger
+   `manual` and does **not** change `last_run` or the schedule.
+3. **Delete** removes a recipient; their log rows are kept.
+4. The **send log** shows the latest 200 attempts with status, Moon sign, house, group, subject, provider
+   message ID and error.
 
 ## 3. Required user inputs
 
@@ -236,6 +259,32 @@ vertical scrolling at common desktop heights; on phones, steps after the intro m
 with `data-ds-picker="date"` get a calendar button that opens the browser's date dialog.
 ❌ The videos have no captions yet.
 
+### 5.7 Scheduled Moon of Transit e-mails (test) ✅
+
+`send_emails.py` runs as a **Render Cron Job every 5 minutes** (`*/5 * * * *`, UTC). Each run:
+
+1. Reads the **active** rows of `tbl_test_recipients`.
+2. Finds each recipient's **latest due slot**: a run time on a run day, in the recipient's timezone, that
+   has already passed but by **no more than 1 hour**, and is later than `last_run`. Yesterday's slots are
+   checked too, so a slot just before midnight still sends. A run that starts a few minutes late still
+   sends; a slot missed by more than an hour (e.g. an outage) is skipped, so stale forecasts are never sent.
+3. **Claims** the slot by setting `last_run` to now, only if no other run already did. This happens
+   **before** sending, so the same slot is never sent twice, even if a run crashes after the send.
+4. Builds the e-mail. **`forecast_type` is ignored for now: every recipient gets Moon of Transit**, with the
+   same rules as the landing page (5.6): the Moon's sign at the current moment, the Sun sign from the date
+   of birth, house and group as in 5.5, and the text from `tbl_moon_of_transit_daily_forecasts`. The start
+   and end times are shown in the recipient's timezone. `language` chooses the wording around the text
+   (`he` right-to-left, `en`); the forecast text itself is always the Hebrew text from the database.
+5. Sends it through the **Brevo** transactional API (`BREVO_API_KEY`; sender `EMAIL_FROM`, a sender verified
+   in Brevo, with the name `EMAIL_FROM_NAME`, default "Astro Forecast"). There is no own domain yet, so the
+   sender is a Gmail address and some e-mails may land in spam.
+6. Writes one row to `tbl_test_email_log` per attempt: `sent`, `failed` (with the error) or `dry_run`.
+
+`EMAIL_DRY_RUN=1` (or `--dry-run`) does everything except the actual send. `--check` only prints who is
+due and changes nothing. The run exits with an error code when any send fails, so Render marks the run as
+failed. `marketing_consent` is stored but does not affect sending yet. Times are stored in the database in
+UTC.
+
 ## 6. Mapping calculation results to forecast texts ✅
 
 Each technique has a mapping table and a texts table. Many results can share the same text.
@@ -262,12 +311,15 @@ Rules:
 
 - **Forecast texts are read-only.** The site never inserts, updates or deletes them, and stores nothing
   about users' calculations. The date of birth is not stored.
-- **Landing page e-mails are the only data the site writes** ✅. Each valid address is saved once, in lower
+- **Landing page e-mails** ✅. Each valid address is saved once, in lower
   case, with the time it was first entered, in `tbl_landing_emails`. `marketing_consent` is true only after
   the visitor ticks the checkbox, and a later submission without the tick does not clear it. Addresses saved
   before the checkbox existed stay false. The site sends nothing to these addresses. Marketing may be sent only
   where `marketing_consent` is true. There is no automatic unsubscribe ❌; requests go to the address in
   `EMAIL_OF_CONSENT`, shown in the page's notice. ❓ See section 9.
+- **Test e-mail recipients and send log** ✅: the admin page (2.5) adds, edits and deletes rows in
+  `tbl_test_recipients`. The cron job (5.7) updates `last_run` and inserts a row into `tbl_test_email_log`
+  for every attempt. These are the only other tables the site writes.
 - **Meta Pixel** ✅: when `META_PIXEL_ID` is set, `/lp/moon` loads the Pixel and sends `PageView` on load and
   `Lead` once per visit after a valid e-mail. Automatic configuration is off, and the e-mail, date of birth and
   forecast are not sent. No other page has the Pixel.
@@ -280,8 +332,8 @@ Rules:
   `authenticated`) have no access. The site connects with its own database role through `ASTRO_DB_URL`.
 - Database: Supabase PostgreSQL. The connection comes from the `ASTRO_DB_URL` environment variable.
   If it is missing, forecasts show an error, but calculations still work.
-- Tables used: the four mapping/text pairs in section 6, `tbl_landing_emails`, and `tbl_signs` (sign
-  names; used only by the `/signs` debug page).
+- Tables used: the four mapping/text pairs in section 6, `tbl_landing_emails`, `tbl_test_recipients`,
+  `tbl_test_email_log`, and `tbl_signs` (sign names; used only by the `/signs` debug page).
 - Calculations themselves do **not** use the database. Only forecast texts come from it.
 - Schema details: `docs/database-schema.md`.
 
@@ -312,6 +364,7 @@ audio files are not used.
 | Current location unavailable | Moon of Transit | "Current location unavailable — please type a location." |
 | Date of birth required, `dd/mm/yyyy`, real date, from 1900, not in the future | Landing page | "יש להזין תאריך לידה." / "יש להזין תאריך תקין…" / "תאריך הלידה לא יכול להיות בעתיד." (server: "תאריך הלידה אינו תקין.") |
 | E-mail required, valid format | Landing page | "יש להזין כתובת מייל." / "יש להזין כתובת מייל תקינה…" (server: "כתובת המייל אינה תקינה.") |
+| Valid unique e-mail; date of birth `dd/mm/yyyy`, from 1900, not in the future; birth time `HH:MM`; place of birth, if entered, chosen from the list; timezone from the list; at least one `HH:MM` run time and one run day; language `he`/`en` | Admin page | "Invalid e-mail" / "This e-mail already exists" / "Invalid date of birth (use dd/mm/yyyy)" / "Date of birth must be between 1900 and today" / "Invalid birth time (use HH:MM)" / "Please select the place of birth from the list" / "Unknown timezone: …" / "Invalid run time: …" / "Choose at least one run day" |
 
 **Business rules ✅**
 
@@ -339,6 +392,9 @@ audio files are not used.
    e-mails go to a mailing service?
 10. **Landing page forecast videos** are a random demo video. How will each forecast (house + group)
     map to its own video, and will the videos have captions?
+11. **Scheduled e-mails after the test:** which recipients will get them in production (e.g.
+    `tbl_landing_emails` with `marketing_consent`)? This needs an unsubscribe link, a verified sending domain,
+    a rule for `forecast_type`, and English forecast texts if `en` recipients should get English. (5.7)
 
 ---
 
@@ -362,8 +418,10 @@ audio files are not used.
 | Secondary Progression ‏(פרוגרסיה סקנדרית) | עמוד הפרוגרסיה הסקנדרית | היכן נמצא הירח המתקדם שלי בשיטת יום-לשנה בתאריך מסוים? | ✅ |
 | Moon of Transit ‏(ירח בטרנזיט) | עמוד הירח בטרנזיט | באיזה מזל נמצא הירח האמיתי עכשיו, מתי יעבור הלאה, ומה המשמעות עבורי? | ✅ |
 | ירח בטרנזיט (עמוד נחיתה) | `/lp/moon` | כמו ירח בטרנזיט, כתהליך קצר ומודרך בעברית למבקרים שמגיעים ממודעות (למשל פייסבוק) | ✅ |
+| מיילים מתוזמנים (בדיקה) | Render Cron Job + ‏`/admin/recipients` | שולח במייל את תחזית הירח בטרנזיט הנוכחית לנמעני בדיקה בימים ובשעות שבחרו | ✅ |
 
-האתר **חינמי ופתוח**. אין חשבונות משתמש, התחברות או תשלומים (ראו סעיף 8).
+האתר **חינמי ופתוח**. אין חשבונות משתמש או תשלומים (ראו סעיף 8). ההתחברות היחידה היא לעמוד הניהול המוגן
+בסיסמה (2.5).
 
 ## 2. תהליכי עבודה של המשתמש
 
@@ -419,6 +477,25 @@ audio files are not used.
    באיזה בית זה עבור המבקר, ואת טווח הזמן.
 6. **טקסט התחזית לא מוצג אוטומטית.** הכפתור **הצגת התחזית בטקסט** פותח אותו בחלון קופץ.
 7. **בדיקה לתאריך לידה אחר** מחזיר לשלב 2.
+
+### 2.5 ניהול נמעני מיילים לבדיקה (`/admin/recipients`) ✅
+
+עמוד באנגלית לבעל האתר, לבדיקת המיילים המתוזמנים (5.7). הוא מוגן בהתחברות HTTP Basic: משתמש `ADMIN_USER`
+(ברירת מחדל `admin`) וסיסמה `ADMIN_PASSWORD`. בלי `ADMIN_PASSWORD` העמוד מושבת. העמוד הראשי מקשר אליו בכפתור **⚙ Admin** (מבקר ללא סיסמה מקבל את חלון ההתחברות).
+העמוד מבקש ממנועי חיפוש לא לאנדקס אותו.
+
+1. **הוספה או עריכה** של נמען: מייל, שם פרטי ושם משפחה, תאריך לידה, שעת לידה (מקומית, ברירת מחדל 12:00),
+   מקום לידה (רשות, נבחר מאותו חיפוש מקומות כמו בשאר העמודים), אזור זמן, שעות שליחה (`HH:MM` מקומי,
+   מופרדות בפסיקים), ימי שליחה (שני–ראשון), שפה (`he`/`en`), הסכמה לדיוור ופעיל.
+   תאריך הלידה מוקלד בפורמט `dd/mm/yyyy` או נבחר מלוח שנה, כמו בשאר העמודים, ומזל השמש מוצג לידו. אזור הזמן
+   נבחר מרשימה של כל אזורי הזמן, מקובצים לפי אזור, עם הפרש השעות הנוכחי מ-UTC. טבלת הנמענים מציגה כל תאריך
+   ושעת לידה עם מזל השמש, ואת מקום הלידה עם הקואורדינטות. שעת ומקום הלידה נשמרים לסוגי תחזית עתידיים; המיילים
+   עדיין אינם משתמשים בהם (מזל השמש עדיין נלקח ב-12:00 UTC, כמו בעמוד הנחיתה).
+2. **Send** שולח מיד את התחזית הנוכחית לנמען אחד. השליחה נרשמת ביומן עם הטריגר `manual` ו**אינה** משנה
+   את `last_run` או את התזמון.
+3. **Delete** מוחק נמען; שורות היומן שלו נשמרות.
+4. **יומן השליחות** מציג את 200 הניסיונות האחרונים עם סטטוס, מזל הירח, בית, קבוצה, נושא, מזהה ההודעה אצל
+   ספק המייל ושגיאה.
 
 ## 3. קלט נדרש מהמשתמש
 
@@ -558,6 +635,30 @@ audio files are not used.
 עשויים לגלול. שדות תאריך עם `data-ds-picker="date"` מקבלים כפתור לוח שנה שפותח את חלון התאריך של הדפדפן.
 ❌ לסרטונים עדיין אין כתוביות.
 
+### 5.7 מיילים מתוזמנים של ירח בטרנזיט (בדיקה) ✅
+
+`send_emails.py` רץ כ-**Render Cron Job כל 5 דקות** (`*/5 * * * *`, ב-UTC). בכל ריצה:
+
+1. נקראות השורות ה**פעילות** בטבלה `tbl_test_recipients`.
+2. לכל נמען נמצא **מועד השליחה האחרון שהגיע**: שעת שליחה ביום שליחה, באזור הזמן של הנמען, שכבר עברה אבל
+   **לא לפני יותר משעה**, ומאוחרת מ-`last_run`. נבדקים גם המועדים של אתמול, כך שמועד ממש לפני חצות עדיין
+   נשלח. ריצה שמתחילה באיחור של כמה דקות עדיין שולחת; מועד שהוחמץ ביותר משעה (למשל בזמן תקלה) מדולג, כך
+   שלעולם לא נשלחת תחזית ישנה.
+3. המועד **נתפס** על ידי עדכון `last_run` לזמן הנוכחי, רק אם ריצה אחרת לא עשתה זאת כבר. זה קורה **לפני**
+   השליחה, כך שאותו מועד לעולם לא נשלח פעמיים, גם אם ריצה קורסת אחרי השליחה.
+4. נבנה המייל. **`forecast_type` מתעלמים ממנו כרגע: כל הנמענים מקבלים ירח בטרנזיט**, לפי אותם כללים של עמוד
+   הנחיתה (5.6): מזל הירח ברגע הנוכחי, מזל השמש מתאריך הלידה, בית וקבוצה כמו ב-5.5, והטקסט מהטבלה
+   `tbl_moon_of_transit_daily_forecasts`. זמני ההתחלה והסיום מוצגים באזור הזמן של הנמען. `language` קובע את
+   הנוסח שמסביב לטקסט (`he` מימין לשמאל, `en`); טקסט התחזית עצמו הוא תמיד הטקסט העברי ממסד הנתונים.
+5. המייל נשלח דרך ה-API של **Brevo** ‏(`BREVO_API_KEY`; שולח `EMAIL_FROM`, כתובת שאומתה ב-Brevo, עם השם
+   `EMAIL_FROM_NAME`, ברירת מחדל "Astro Forecast"). עדיין אין דומיין משלנו, ולכן השולח הוא כתובת Gmail וחלק
+   מהמיילים עלולים להגיע לספאם.
+6. לכל ניסיון נכתבת שורה אחת ב-`tbl_test_email_log`: ‏`sent`, ‏`failed` (עם השגיאה) או `dry_run`.
+
+`EMAIL_DRY_RUN=1` (או `--dry-run`) מבצע הכול חוץ מהשליחה עצמה. `--check` רק מדפיס מי צריך לקבל מייל ואינו
+משנה דבר. הריצה מסתיימת עם קוד שגיאה כשאחת השליחות נכשלת, כך ש-Render מסמן את הריצה ככושלת.
+`marketing_consent` נשמר אבל עדיין אינו משפיע על השליחה. הזמנים נשמרים במסד הנתונים ב-UTC.
+
 ## 6. מיפוי תוצאות החישוב לטקסטי תחזית ✅
 
 לכל שיטה יש טבלת מיפוי וטבלת טקסטים. תוצאות רבות יכולות לחלוק את אותו טקסט.
@@ -584,11 +685,14 @@ audio files are not used.
 
 - **טקסטי התחזית לקריאה בלבד.** האתר לעולם אינו מוסיף, מעדכן או מוחק אותם, ואינו שומר דבר על החישובים
   של המשתמשים. תאריך הלידה אינו נשמר.
-- **כתובות המייל מעמוד הנחיתה הן הנתונים היחידים שהאתר כותב** ✅. כל כתובת תקינה נשמרת פעם אחת, באותיות
+- **כתובות המייל מעמוד הנחיתה** ✅. כל כתובת תקינה נשמרת פעם אחת, באותיות
   קטנות, עם מועד ההזנה הראשון, בטבלה `tbl_landing_emails`. הערך `marketing_consent` הופך לאמת רק אחרי שהמבקר
   מסמן את התיבה, ושליחה מאוחרת יותר ללא סימון אינה מבטלת אותו. כתובות שנשמרו לפני שנוספה התיבה נשארות עם הערך
   שקר. האתר אינו שולח דבר לכתובות האלה. מותר לשלוח דיוור רק כאשר `marketing_consent` הוא אמת. אין הסרה אוטומטית
   מרשימת הדיוור ❌; בקשות מגיעות לכתובת שב-`EMAIL_OF_CONSENT`, המוצגת בהודעה שבעמוד. ❓ ראו סעיף 9.
+- **נמעני מיילים לבדיקה ויומן שליחות** ✅: עמוד הניהול (2.5) מוסיף, עורך ומוחק שורות ב-`tbl_test_recipients`.
+  משימת ה-Cron ‏(5.7) מעדכנת את `last_run` ומוסיפה שורה ל-`tbl_test_email_log` בכל ניסיון. אלה הטבלאות
+  היחידות הנוספות שהאתר כותב אליהן.
 - **הפיקסל של Meta** ✅: כאשר `META_PIXEL_ID` מוגדר, העמוד `/lp/moon` טוען את הפיקסל ושולח `PageView` בטעינה
   ו-`Lead` פעם אחת בכל ביקור אחרי הזנת מייל תקין. התצורה האוטומטית כבויה, והמייל, תאריך הלידה והתחזית אינם נשלחים.
   בשאר העמודים אין פיקסל.
@@ -601,8 +705,8 @@ audio files are not used.
   `authenticated`) אין גישה. האתר מתחבר עם תפקיד מסד הנתונים שלו דרך `ASTRO_DB_URL`.
 - מסד הנתונים: Supabase PostgreSQL. פרטי החיבור נלקחים ממשתנה הסביבה `ASTRO_DB_URL`.
   אם הוא חסר, התחזיות מציגות שגיאה, אבל החישובים ממשיכים לעבוד.
-- טבלאות בשימוש: ארבעת זוגות טבלאות המיפוי והטקסטים שבסעיף 6, `tbl_landing_emails`, ו-`tbl_signs` (שמות
-  המזלות; משמשת רק את עמוד הבדיקה `/signs`).
+- טבלאות בשימוש: ארבעת זוגות טבלאות המיפוי והטקסטים שבסעיף 6, `tbl_landing_emails`, `tbl_test_recipients`,
+  `tbl_test_email_log`, ו-`tbl_signs` (שמות המזלות; משמשת רק את עמוד הבדיקה `/signs`).
 - החישובים עצמם **אינם** משתמשים במסד הנתונים. רק טקסטי התחזית מגיעים ממנו.
 - פרטי המבנה: `docs/database-schema.md`.
 
@@ -632,6 +736,7 @@ audio files are not used.
 | המיקום הנוכחי אינו זמין | ירח בטרנזיט | "Current location unavailable — please type a location." |
 | תאריך לידה חובה, `dd/mm/yyyy`, תאריך אמיתי, מ-1900, לא בעתיד | עמוד הנחיתה | "יש להזין תאריך לידה." / "יש להזין תאריך תקין…" / "תאריך הלידה לא יכול להיות בעתיד." (בשרת: "תאריך הלידה אינו תקין.") |
 | מייל חובה, בפורמט תקין | עמוד הנחיתה | "יש להזין כתובת מייל." / "יש להזין כתובת מייל תקינה…" (בשרת: "כתובת המייל אינה תקינה.") |
+| מייל תקין וייחודי; תאריך לידה `dd/mm/yyyy`, מ-1900, לא בעתיד; שעת לידה `HH:MM`; מקום לידה, אם הוזן, נבחר מהרשימה; אזור זמן מהרשימה; לפחות שעת שליחה אחת בפורמט `HH:MM` ויום שליחה אחד; שפה `he`/`en` | עמוד הניהול | "Invalid e-mail" / "This e-mail already exists" / "Invalid date of birth (use dd/mm/yyyy)" / "Date of birth must be between 1900 and today" / "Invalid birth time (use HH:MM)" / "Please select the place of birth from the list" / "Unknown timezone: …" / "Invalid run time: …" / "Choose at least one run day" |
 
 **כללים עסקיים ✅**
 
@@ -658,5 +763,8 @@ audio files are not used.
    Analytics לפני שהמבקר קרא את ההודעה או הסכים לעוגיות (במיוחד עבור מבקרים מאירופה)? הנוסח דורש בדיקה משפטית. האם הכתובות יועברו לשירות דיוור?
 10. **סרטוני התחזית בעמוד הנחיתה** הם סרטון דוגמה אקראי. איך כל תחזית (בית + קבוצה) תמופה לסרטון
     משלה, והאם יהיו לסרטונים כתוביות?
+11. **מיילים מתוזמנים אחרי הבדיקה:** מי יקבל אותם בסביבת הייצור (למשל `tbl_landing_emails` עם
+    `marketing_consent`)? נדרשים קישור הסרה, דומיין שולח מאומת, כלל עבור `forecast_type`, וטקסטי תחזית באנגלית
+    אם נמעני `en` אמורים לקבל אנגלית. (5.7)
 
 </div>
