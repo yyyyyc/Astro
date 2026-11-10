@@ -85,10 +85,10 @@ also links to it with the **✦ Landing Page** button.
    lets the visitor **skip** to the form, and a mute button appears once the video plays. The intro screen fits the viewport exactly (no vertical scroll).
 2. When the video ends (or is skipped, or fails to load), it **transforms into a zodiac wheel** and a
    form asks for the **date of birth**.
-3. The visitor clicks **שליחה** (Send). The wheel **spins for about 4.5 seconds** and stops with the
+3. The visitor clicks **גלו את התחזית האישית שלי** (Reveal my personal forecast). The wheel **spins for about 4.5 seconds** and stops with the
    visitor's Sun sign under the pointer.
-4. A photo of **Yaron** appears with the message: "הפקתי את התחזית לבני מזל <sign> על פי תאריך הלידה
-   שהזנתם", followed by "לצפייה בתחזית הזינו את כתובת המייל שלכם", and an **e-mail** field.
+4. A photo of **Yaron** appears with the message: "התחזית האישית שלכם מוכנה!" (the message no longer names
+   the sign; the wheel has just stopped on it), followed by "לצפייה בתחזית הזינו את כתובת המייל שלכם", and an **e-mail** field.
 5. After a valid e-mail is entered, the wheel transforms into the **forecast video**, and a short summary
    says which sign the Moon is in now, which house that is for the visitor, and the time frame.
 6. The forecast **text is not shown automatically**. The button **הצגת התחזית בטקסט** (Show the forecast
@@ -470,9 +470,9 @@ audio files are not used.
    כפתור מאפשר **לדלג** לטופס, וכפתור השתקה מופיע כשהסרטון מתנגן. מסך הפתיחה תופס בדיוק את גובה החלון (ללא גלילה אנכית).
 2. כשהסרטון מסתיים (או כשמדלגים עליו, או כשהוא לא נטען), הוא **הופך לגלגל מזלות** וטופס מבקש את
    **תאריך הלידה**.
-3. המבקר לוחץ על **שליחה**. הגלגל **מסתובב כ-4.5 שניות** ונעצר כשמזל השמש של המבקר מתחת למחוג.
-4. מופיעה תמונה של **ירון** עם ההודעה: "הפקתי את התחזית לבני מזל <מזל> על פי תאריך הלידה שהזנתם",
-   ואחריה "לצפייה בתחזית הזינו את כתובת המייל שלכם", ושדה **מייל**.
+3. המבקר לוחץ על **גלו את התחזית האישית שלי**. הגלגל **מסתובב כ-4.5 שניות** ונעצר כשמזל השמש של המבקר מתחת למחוג.
+4. מופיעה תמונה של **ירון** עם ההודעה: "התחזית האישית שלכם מוכנה!" (ההודעה כבר אינה מזכירה את המזל; הגלגל
+   נעצר עליו רגע לפני כן), ואחריה "לצפייה בתחזית הזינו את כתובת המייל שלכם", ושדה **מייל**.
 5. אחרי הזנת מייל תקין, הגלגל הופך ל**סרטון התחזית**, וסיכום קצר מציין באיזה מזל הירח נמצא עכשיו,
    באיזה בית זה עבור המבקר, ואת טווח הזמן.
 6. **טקסט התחזית לא מוצג אוטומטית.** הכפתור **הצגת התחזית בטקסט** פותח אותו בחלון קופץ.

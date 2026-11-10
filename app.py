@@ -961,11 +961,13 @@ TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 def protect_admin():
     if not request.path.startswith("/admin"):
         return None
-    password = os.environ.get("ADMIN_PASSWORD", "")
+    # Strip: a value pasted into the hosting dashboard often carries a stray space or line break.
+    password = os.environ.get("ADMIN_PASSWORD", "").strip()
     if not password:
         return Response("Admin is disabled: ADMIN_PASSWORD is not set.", 503)
     auth = request.authorization
-    user_ok = auth is not None and hmac.compare_digest(auth.username or "", os.environ.get("ADMIN_USER", "admin"))
+    admin_user = os.environ.get("ADMIN_USER", "").strip() or "admin"
+    user_ok = auth is not None and hmac.compare_digest(auth.username or "", admin_user)
     pass_ok = auth is not None and hmac.compare_digest(auth.password or "", password)
     if not (user_ok and pass_ok):
         return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="Astro admin"'})
