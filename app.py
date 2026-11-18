@@ -826,10 +826,11 @@ def parse_landing_dob(value):
     return dob if datetime(1900, 1, 1).date() <= dob <= datetime.now().date() else None
 
 
-def save_landing_email(email, marketing_consent):
-    """Store a landing page e-mail once, in lower case. Consent, once given, is not cleared by a later
-    submission without the checkbox. A failure is logged without the address and never blocks the
-    visitor's forecast."""
+def save_landing_email(email, marketing_consent, sun_sign=None):
+    """Store a landing page e-mail once, in lower case, with the visitor's Sun sign (English name; the
+    date of birth itself is never stored). Consent, once given, is not cleared by a later submission
+    without the checkbox; a later submission with a sign replaces the stored sign. A failure is logged
+    without the address and never blocks the visitor."""
     engine = get_engine()
     if engine is None:
         app.logger.error("Could not save landing page e-mail: ASTRO_DB_URL is not set")
@@ -839,13 +840,14 @@ def save_landing_email(email, marketing_consent):
             conn.execute(
                 text(
                     """
-                    INSERT INTO tbl_landing_emails (email, marketing_consent)
-                    VALUES (:email, :consent)
+                    INSERT INTO tbl_landing_emails (email, marketing_consent, sun_sign)
+                    VALUES (:email, :consent, :sun_sign)
                     ON CONFLICT (email) DO UPDATE
-                    SET marketing_consent = tbl_landing_emails.marketing_consent OR EXCLUDED.marketing_consent
+                    SET marketing_consent = tbl_landing_emails.marketing_consent OR EXCLUDED.marketing_consent,
+                        sun_sign = COALESCE(EXCLUDED.sun_sign, tbl_landing_emails.sun_sign)
                     """
                 ),
-                {"email": email.lower(), "consent": marketing_consent},
+                {"email": email.lower(), "consent": marketing_consent, "sun_sign": sun_sign},
             )
     except Exception as exc:
         app.logger.error("Could not save landing page e-mail: %s", type(exc).__name__)
@@ -860,16 +862,23 @@ def landing_moon_sign():
     return jsonify({"sign": sign, "sign_he": ZODIAC_SIGNS_HE[sign], "symbol": ZODIAC_SYMBOLS[sign]})
 
 
+@app.route("/lp/moon/subscribe", methods=["POST"])
+def landing_moon_subscribe():
+    data = request.get_json() or {}
+    email = str(data.get("email") or "").strip()
+    if len(email) > 254 or not EMAIL_RE.match(email):
+        return jsonify({"error": "כתובת המייל אינה תקינה."}), 400
+    dob = parse_landing_dob(data.get("dob"))  # used only to work out the Sun sign; not stored
+    save_landing_email(email, data.get("marketing_consent") is True, sun_sign_on(dob) if dob else None)
+    return jsonify({"ok": True})
+
+
 @app.route("/lp/moon/forecast", methods=["POST"])
 def landing_moon_forecast():
     data = request.get_json() or {}
     dob = parse_landing_dob(data.get("dob"))
     if dob is None:
         return jsonify({"error": "תאריך הלידה אינו תקין."}), 400
-    email = str(data.get("email") or "").strip()
-    if len(email) > 254 or not EMAIL_RE.match(email):
-        return jsonify({"error": "כתובת המייל אינה תקינה."}), 400
-    save_landing_email(email, data.get("marketing_consent") is True)
     tz_name = data.get("tz") if data.get("tz") in pytz.all_timezones_set else LANDING_DEFAULT_TZ
     local_tz = pytz.timezone(tz_name)
 

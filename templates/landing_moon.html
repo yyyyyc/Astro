@@ -111,7 +111,7 @@
       }
       body:not(.is-intro) .lp-intro { grid-area: intro; }
       body:not(.is-intro) .stage { grid-area: stage; }
-      body:not(.is-intro) .panel { grid-area: panel; }
+      body:not(.is-intro) .side { grid-area: panel; }
       body:not(.is-intro) .stage__frame video { max-height: calc(100vh - 260px); max-height: calc(100dvh - 260px); }
     }
     .wheel__halo, .wheel__disc { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -148,33 +148,34 @@
       to   { opacity: 1; transform: none; filter: none; }
     }
 
-    /* Step panels below the stage */
+    /* Step panels below the stage (beside it on wide screens). On small screens the e-mail
+       sign-up comes first, right under the forecast video */
+    .side { width: 100%; max-width: 520px; display: flex; flex-direction: column; align-items: center; gap: var(--ds-space-4); }
+    .side > #subscribe { order: -1; }
     .panel { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: var(--ds-space-4); }
     .panel [data-step-heading]:focus { outline: none; }
     .panel [data-step-heading]:focus-visible { outline: 3px solid var(--ds-color-focus); }
 
-    .yaron { display: flex; flex-direction: column; align-items: center; gap: var(--ds-space-4); margin: 0; }
-    .yaron__photo-wrap {
-      width: 120px; height: 120px; border-radius: 50%; padding: 4px;
-      background: conic-gradient(from 0deg, var(--ds-color-gold-strong), var(--ds-color-violet), var(--ds-color-gold-strong));
-      box-shadow: 0 0 30px rgba(230, 194, 122, 0.45);
-      animation: pop 0.8s var(--ds-ease) both;
+    /* E-mail sign-up under the forecast video */
+    .subscribe { width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: var(--ds-space-4); text-align: start; }
+    .subscribe .ds-heading { text-align: center; font-size: var(--ds-text-lg); }
+    .subscribe__row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--ds-space-3); }
+    .subscribe__row .ds-field { flex: 1 1 200px; }
+    .subscribe__row .ds-btn { flex: 1 1 auto; white-space: nowrap; }
+    .subscribe .ds-field__hint { font-size: 0.75rem; line-height: 1.45; }
+    .subscribe__done { display: flex; flex-direction: column; align-items: center; gap: var(--ds-space-3); text-align: center; }
+    .subscribe__done .ds-text:focus { outline: none; }
+    .subscribe__email { color: var(--ds-color-gold-strong); font-weight: 700; }
+    .subscribe__done-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--ds-space-3); }
+
+    /* "Remember me" notice and the link-style button that clears the saved details */
+    .remember-note { text-align: center; margin: 0; }
+    .remember-forget {
+      background: none; border: 0; padding: 0; font: inherit; font-size: var(--ds-text-sm);
+      color: var(--ds-color-gold); text-decoration: underline; cursor: pointer;
     }
-    .yaron__photo { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; object-position: 50% 15%; }
-    .yaron__name { font-size: var(--ds-text-sm); color: var(--ds-color-gold); font-weight: 700; }
-    @keyframes pop { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: none; } }
-    .bubble {
-      position: relative; margin: 0; padding: var(--ds-space-4) var(--ds-space-5);
-      background: var(--ds-color-surface-2); border: 1px solid var(--ds-color-border-strong);
-      border-radius: var(--ds-radius-lg); display: flex; flex-direction: column; gap: var(--ds-space-2);
-      animation: ds-rise 0.8s 0.4s var(--ds-ease) both;
-    }
-    .bubble::before {
-      content: ""; position: absolute; top: -10px; left: 50%; width: 18px; height: 18px;
-      background: inherit; border-top: inherit; border-left: inherit;
-      transform: translateX(-50%) rotate(45deg);
-    }
-    .bubble .ds-heading { font-size: var(--ds-text-lg); }
+    .remember-forget:hover { color: var(--ds-color-gold-strong); }
+    .remember-forget:focus-visible { outline: 3px solid var(--ds-color-focus); outline-offset: 2px; }
 
     .result-sign { font-size: 2.6rem; line-height: 1; color: var(--ds-color-gold-strong); }
     .result-actions { display: flex; flex-direction: column; gap: var(--ds-space-3); }
@@ -183,20 +184,15 @@
 
     /* Wide screens: compact panels so every step fits one screen (kept last so it overrides the above) */
     @media (min-width: 900px) {
-      .yaron {
-        display: grid; grid-template-columns: auto 1fr;
-        grid-template-areas: "photo bubble" "name bubble";
-        align-items: center; column-gap: var(--ds-space-5); row-gap: var(--ds-space-2);
-      }
-      .yaron__photo-wrap { grid-area: photo; width: 96px; height: 96px; justify-self: center; }
-      .yaron__name { grid-area: name; }
-      .yaron .bubble { grid-area: bubble; text-align: start; }
-      .bubble::before {   /* arrow points sideways at the photo (on the right in RTL) */
-        top: 50%; left: auto; right: -10px;
-        border-left: 0; border-bottom: 0; border-right: inherit;
-        transform: translateY(-50%) rotate(45deg);
-      }
       .lp-footer { margin-top: var(--ds-space-4); }
+      .side { gap: var(--ds-space-3); }
+      .side > #subscribe { order: 0; }
+      /* Compact forecast card + sign-up so both fit next to the video */
+      .subscribe.ds-card, #step-result.ds-card { padding: var(--ds-space-4) var(--ds-space-5); gap: var(--ds-space-3); }
+      #step-result .result-sign { font-size: 2rem; }
+      #step-result .ds-heading--lg { font-size: var(--ds-text-lg); }
+      .result-actions { flex-direction: row; }
+      .result-actions .ds-btn { flex: 1 1 0; padding-inline: var(--ds-space-3); }
     }
     /* Short wide screens (laptops, Windows display scaling): tighten vertical rhythm */
     @media (min-width: 900px) and (max-height: 860px) {
@@ -209,6 +205,14 @@
       .panel.ds-card { padding: var(--ds-space-5); }
       .wheel { width: min(400px, calc(100vh - 250px)); width: min(400px, calc(100dvh - 250px)); }
       .lp-footer { margin-top: var(--ds-space-3); }
+    }
+    /* Very short wide screens: on the forecast step, the moon glyph moves to the card's corner
+       and the footer line is dropped, so the forecast card + sign-up fit beside the video */
+    @media (min-width: 900px) and (max-height: 720px) {
+      #step-result { position: relative; }
+      #step-result .result-sign { position: absolute; top: var(--ds-space-3); inset-inline-start: var(--ds-space-4); font-size: 1.6rem; }
+      body:has(#subscribe:not([hidden])) .lp-footer { display: none; }
+      .subscribe .ds-field__hint { line-height: 1.35; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -297,6 +301,7 @@
       </div>
     </div>
 
+    <div class="side">
     <!-- Step A: date of birth -->
     <section class="panel ds-card ds-reveal" id="step-dob" aria-labelledby="dob-title" hidden>
       <h2 class="ds-heading ds-heading--lg" id="dob-title" tabindex="-1" data-step-heading>גלו מה הירח אומר עליכם</h2>
@@ -312,45 +317,14 @@
         </div>
         <p class="ds-form__error" role="alert" data-ds-form-error></p>
         <button type="submit" class="ds-btn ds-btn--primary ds-btn--block">גלו את התחזית האישית שלי</button>
-      </form>
-    </section>
-
-    <!-- Step B: Yaron + e-mail -->
-    <section class="panel ds-card ds-reveal" id="step-email" aria-labelledby="yaron-quote" hidden>
-      <figure class="yaron">
-        <span class="yaron__photo-wrap">
-          <img class="yaron__photo" src="/media/images/yaron_livne.png" alt="" width="132" height="212" />
-        </span>
-        <figcaption class="yaron__name">ירון ליבנה</figcaption>
-        <blockquote class="bubble">
-          <h2 class="ds-heading" id="yaron-quote" tabindex="-1" data-step-heading>
-<!--            ”הפקתי את התחזית לבני מזל <span id="yaron-sign"></span> על פי תאריך הלידה שהזנתם“-->
-            ”התחזית האישית שלכם מוכנה!”
-          </h2>
-          <p class="ds-text">לצפייה בתחזית הזינו את כתובת המייל שלכם</p>
-        </blockquote>
-      </figure>
-      <form class="ds-form" id="email-form">
-        <div class="ds-field">
-          <label class="ds-field__label" for="email">כתובת מייל</label>
-          <input class="ds-input ds-input--ltr" id="email" name="email" type="email" inputmode="email" autocomplete="email"
-                 placeholder="name@example.com" maxlength="254" data-ds-rules="required email"
-                 data-ds-required-msg="יש להזין כתובת מייל." aria-describedby="email-error" required />
-          <p class="ds-field__error" id="email-error" aria-live="polite"></p>
-        </div>
-        <label class="ds-check">
-          <input type="checkbox" id="marketing-consent" name="marketing_consent" />
-          <span>אני מסכים/ה לקבל מירון ליבנה עדכונים והצעות במייל. אפשר לבטל את ההסכמה בכל עת.</span>
-        </label>
-        <p class="ds-form__error" role="alert" data-ds-form-error></p>
-        <button type="submit" class="ds-btn ds-btn--primary ds-btn--block">לצפייה בתחזית</button>
-        <p class="ds-field__hint">
-          המייל שלכם נשמר אצלנו, ונשלח אליו עדכונים והצעות רק אם סימנתם הסכמה. האתר משתמש בפיקסל של Meta כדי למדוד את ביצועי המודעות, וב-Google Analytics כדי להבין איך משתמשים באתר, ולכן Meta ו-Google מקבלות נתוני גלישה, כמו ביקור בעמוד והשארת פרטים. איננו מעבירים להן את כתובת המייל או את תאריך הלידה שהזנתם.{% if consent_email %} לבקשות מחיקה או לביטול הסכמה: <a href="mailto:{{ consent_email }}" dir="ltr">{{ consent_email }}</a>{% endif %}
+        <p class="ds-field__hint remember-note">
+          תאריך הלידה נשמר בדפדפן שלכם בלבד, כדי שלא תצטרכו להזין אותו שוב בביקור הבא.
+          <button type="button" class="remember-forget" data-forget-me hidden>שכחו אותי במכשיר הזה</button>
         </p>
       </form>
     </section>
 
-    <!-- Step C: forecast -->
+    <!-- Step B: forecast -->
     <section class="panel ds-card ds-reveal" id="step-result" aria-labelledby="result-title" hidden>
       <span class="result-sign ds-glyph" id="result-symbol" aria-hidden="true"></span>
       <h2 class="ds-heading ds-heading--lg" id="result-title" tabindex="-1" data-step-heading></h2>
@@ -363,6 +337,41 @@
         <button type="button" class="ds-btn ds-btn--ghost ds-btn--block" id="restart">בדיקה לתאריך לידה אחר</button>
       </div>
     </section>
+
+    <!-- Optional e-mail sign-up: under the video on small screens, under the forecast card on wide ones -->
+    <section class="subscribe ds-card ds-reveal" id="subscribe" aria-labelledby="subscribe-title" hidden>
+      <h2 class="ds-heading" id="subscribe-title">רוצים לקבל עדכון כשהתחזית משתנה? השאירו אימייל</h2>
+      <form class="ds-form" id="email-form">
+        <div class="subscribe__row">
+          <div class="ds-field">
+            <label class="ds-field__label ds-visually-hidden" for="email">כתובת מייל</label>
+            <input class="ds-input ds-input--ltr" id="email" name="email" type="email" inputmode="email" autocomplete="email"
+                   placeholder="name@example.com" maxlength="254" data-ds-rules="required email"
+                   data-ds-required-msg="יש להזין כתובת מייל." aria-describedby="email-error" required />
+            <p class="ds-field__error" id="email-error" aria-live="polite"></p>
+          </div>
+          <button type="submit" class="ds-btn ds-btn--primary">שלחו לי עדכונים</button>
+        </div>
+        <label class="ds-check">
+          <input type="checkbox" id="marketing-consent" name="marketing_consent" />
+          <span>אני מסכים/ה לקבל מירון ליבנה עדכונים והצעות במייל. אפשר לבטל את ההסכמה בכל עת.</span>
+        </label>
+        <p class="ds-form__error" role="alert" data-ds-form-error></p>
+        <p class="ds-field__hint">
+          המייל שלכם נשמר אצלנו יחד עם מזל השמש שלכם (ללא תאריך הלידה עצמו), כדי שנוכל לשלוח לכם את התחזית המתאימה, ונשלח אליו עדכונים והצעות רק אם סימנתם הסכמה. המייל ותאריך הלידה נשמרים גם בדפדפן שלכם, כדי שלא תצטרכו להזין אותם שוב. האתר משתמש בפיקסל של Meta כדי למדוד את ביצועי המודעות, וב-Google Analytics כדי להבין איך משתמשים באתר, ולכן Meta ו-Google מקבלות נתוני גלישה, כמו ביקור בעמוד והשארת פרטים. איננו מעבירים להן את כתובת המייל או את תאריך הלידה שהזנתם.{% if consent_email %} לבקשות מחיקה או לביטול הסכמה: <a href="mailto:{{ consent_email }}" dir="ltr">{{ consent_email }}</a>{% endif %}
+        </p>
+      </form>
+      <div class="subscribe__done" id="subscribe-done" hidden>
+        <p class="ds-text" id="subscribe-done-text" tabindex="-1">
+          נעדכן אתכם במייל <bdi class="subscribe__email" id="subscribe-email" dir="ltr"></bdi> כשהתחזית משתנה.
+        </p>
+        <div class="subscribe__done-actions">
+          <button type="button" class="ds-btn ds-btn--ghost ds-btn--sm" id="subscribe-edit">שינוי כתובת המייל</button>
+          <button type="button" class="remember-forget" data-forget-me hidden>שכחו אותי במכשיר הזה</button>
+        </div>
+      </div>
+    </section>
+    </div>
 
     <p class="ds-visually-hidden" id="live" aria-live="polite"></p>
   </main>
@@ -399,8 +408,23 @@
       const forecastVideo = $('forecast-video');
       const wheel = $('wheel');
       const disc = $('wheel-disc');
-      const steps = [$('step-dob'), $('step-email'), $('step-result')];
+      const steps = [$('step-dob'), $('step-result')];
       const state = { dob: null, sign: null, forecast: null, rotation: 0, introDone: false, leadTracked: false };
+
+      // ── Remembered details (this browser only): { dob: 'dd/mm/yyyy', email } ─
+      // Storage can be blocked (private mode, site data off); the page then simply doesn't remember.
+      const STORE_KEY = 'lpMoonVisitor';
+      function loadSaved() {
+        try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; }
+      }
+      function saveDetails(patch) {
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(Object.assign(loadSaved(), patch))); } catch (e) {}
+        syncForgetButtons();
+      }
+      function syncForgetButtons() {
+        const saved = loadSaved();
+        document.querySelectorAll('[data-forget-me]').forEach(b => { b.hidden = !(saved.dob || saved.email); });
+      }
 
       function announce(msg) {
         const el = $('live');
@@ -496,41 +520,31 @@
         }, SPIN_MS));
       }
 
+      // ── 2b. Date of birth → wheel spin → forecast video (no e-mail needed) ─
       DS.bindForm($('dob-form'), async form => {
         const btn = form.querySelector('[type="submit"]');
         const dob = DS.dmyToIso($('dob').value);
         DS.setBusy(btn, true);
-        let data;
+        let sign, data;
         try {
-          data = await postJson('/lp/moon/sign', { dob });
+          sign = await postJson('/lp/moon/sign', { dob });
         } catch (err) {
           DS.setFormError(form, err.message);
           DS.setBusy(btn, false);
           return;
         }
         state.dob = dob;
-        state.sign = data;
+        state.sign = sign;
         announce('מפיקים את התחזית שלכם…');
-        await spinTo(data.sign);
-        DS.setBusy(btn, false);
-        $('wheel-title').textContent = `גלגל המזלות — מזל ${data.sign_he}`;
-        const yaronSign = $('yaron-sign');  // optional: only if the quote names the sign
-        if (yaronSign) yaronSign.textContent = data.sign_he;
-        showStep($('step-email'));
-      });
-
-      // ── 3. E-mail → forecast video ─────────────────────────────────────────
-      DS.bindForm($('email-form'), async form => {
-        const btn = form.querySelector('[type="submit"]');
-        DS.setBusy(btn, true);
-        let data;
+        // The forecast is fetched while the wheel spins
+        const forecastReq = postJson('/lp/moon/forecast', {
+          dob, tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        });
+        forecastReq.catch(() => {});
+        await spinTo(sign.sign);
+        $('wheel-title').textContent = `גלגל המזלות — מזל ${sign.sign_he}`;
         try {
-          data = await postJson('/lp/moon/forecast', {
-            dob: state.dob,
-            email: $('email').value.trim(),
-            marketing_consent: $('marketing-consent').checked,
-            tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          });
+          data = await forecastReq;
         } catch (err) {
           DS.setFormError(form, err.message);
           DS.setBusy(btn, false);
@@ -538,14 +552,9 @@
         }
         DS.setBusy(btn, false);
         state.forecast = data;
-        // One lead per visit, with no visitor details: "another date of birth" must not count again
-        if (!state.leadTracked) {
-          state.leadTracked = true;
-          if (window.fbq) fbq('track', 'Lead');
-          if (window.gtag) gtag('event', 'generate_lead');
-        }
+        saveDetails({ dob: $('dob').value });
 
-        $('result-symbol').textContent = data.moon_sign_symbol + '︎';
+        $('result-symbol').textContent = sign.symbol + '︎';   // the visitor's own (Sun) sign, matching the title
         $('result-title').textContent = `התחזית שלכם, בני מזל ${data.sun_sign_he}`;
         $('result-summary').textContent =
           `הירח נמצא עכשיו במזל ${data.moon_sign_he}, בבית ${HOUSES_HE[data.house_number - 1]} שלכם ` +
@@ -563,6 +572,75 @@
           await swapStage($('wheel-wrap'), $('forecast-wrap'));
         }
         showStep($('step-result'));
+        $('subscribe').hidden = false;
+      });
+
+      // Returning visitor: start from the remembered date instead of "30 years ago"
+      const DOB_DEFAULT = $('dob').defaultValue;
+      const savedAtLoad = loadSaved();
+      if (savedAtLoad.dob && DS.dmyToIso(savedAtLoad.dob)) $('dob').defaultValue = savedAtLoad.dob;
+
+      // ── 3. Optional e-mail sign-up under the video ─────────────────────────
+      function showSubscribed(email) {
+        $('subscribe-email').textContent = email;
+        $('email').value = email;
+        $('subscribe-title').hidden = true;
+        $('email-form').hidden = true;
+        $('subscribe-done').hidden = false;
+      }
+
+      DS.bindForm($('email-form'), async form => {
+        const btn = form.querySelector('[type="submit"]');
+        DS.setBusy(btn, true);
+        try {
+          await postJson('/lp/moon/subscribe', {
+            email: $('email').value.trim(),
+            marketing_consent: $('marketing-consent').checked,
+            dob: state.dob,   // the server keeps only the Sun sign worked out from it
+          });
+        } catch (err) {
+          DS.setFormError(form, err.message);
+          DS.setBusy(btn, false);
+          return;
+        }
+        DS.setBusy(btn, false);
+        // One lead per visit, with no visitor details
+        if (!state.leadTracked) {
+          state.leadTracked = true;
+          if (window.fbq) fbq('track', 'Lead');
+          if (window.gtag) gtag('event', 'generate_lead');
+        }
+        const email = $('email').value.trim();
+        saveDetails({ email });
+        showSubscribed(email);
+        $('subscribe-done-text').focus();
+      });
+
+      // Returning subscriber: show "we will update you at …" straight away
+      if (savedAtLoad.email) showSubscribed(savedAtLoad.email);
+      syncForgetButtons();
+
+      // "Forget me on this device": clears only what this browser remembers
+      document.querySelectorAll('[data-forget-me]').forEach(b => b.addEventListener('click', () => {
+        try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+        $('dob').defaultValue = DOB_DEFAULT;
+        if (!$('step-dob').hidden) $('dob').value = DOB_DEFAULT;
+        $('email').value = '';
+        $('subscribe-done').hidden = true;
+        $('subscribe-title').hidden = false;
+        $('email-form').hidden = false;
+        syncForgetButtons();   // hides the clicked button, so move focus to the field it relates to
+        (b.closest('#subscribe') ? $('email') : $('dob')).focus();
+        announce('הפרטים נמחקו מהמכשיר הזה.');
+      }));
+
+      // Change the e-mail: show the form again, filled with the current address
+      $('subscribe-edit').addEventListener('click', () => {
+        $('subscribe-done').hidden = true;
+        $('subscribe-title').hidden = false;
+        $('email-form').hidden = false;
+        $('email').focus();
+        $('email').select();
       });
 
       // ── 4. Text forecast pop-up and restart ────────────────────────────────
@@ -573,7 +651,7 @@
       $('restart').addEventListener('click', async () => {
         forecastVideo.pause();
         $('dob-form').reset();
-        $('email-form').reset();
+        $('subscribe').hidden = true;
         if (!$('forecast-wrap').hidden) await swapStage($('forecast-wrap'), $('wheel-wrap'));
         showStep($('step-dob'));
       });

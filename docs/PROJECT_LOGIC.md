@@ -87,13 +87,26 @@ also links to it with the **✦ Landing Page** button.
    form asks for the **date of birth**.
 3. The visitor clicks **גלו את התחזית האישית שלי** (Reveal my personal forecast). The wheel **spins for about 4.5 seconds** and stops with the
    visitor's Sun sign under the pointer.
-4. A photo of **Yaron** appears with the message: "התחזית האישית שלכם מוכנה!" (the message no longer names
-   the sign; the wheel has just stopped on it), followed by "לצפייה בתחזית הזינו את כתובת המייל שלכם", and an **e-mail** field.
-5. After a valid e-mail is entered, the wheel transforms into the **forecast video**, and a short summary
-   says which sign the Moon is in now, which house that is for the visitor, and the time frame.
+4. Right after the spin (no e-mail needed), the wheel transforms into the **forecast video**. The forecast
+   card shows the symbol of the visitor's **Sun sign** (the sign named in its title), and a short summary says which sign the Moon is in now, which house that is for the visitor, and the time frame.
+5. An **optional e-mail sign-up** (on phones right under the video; on wide screens under the forecast
+   summary, beside the video, so the whole step fits one screen without scrolling) is titled "רוצים לקבל עדכון כשהתחזית משתנה? השאירו
+   אימייל" (Want an update when the forecast changes? Leave your e-mail), with the e-mail field, the marketing
+   consent checkbox, the **שלחו לי עדכונים** (Send me updates) button and the privacy notice. After a valid
+   e-mail the title and form are replaced by "נעדכן אתכם במייל ‹address› כשהתחזית משתנה" (We will update you
+   at ‹address› when the forecast changes) and a **שינוי כתובת המייל** (Change e-mail address) button, which
+   shows the form again filled with the address. A changed address is saved as a new row; the previous one is
+   kept. (The former step with Yaron's photo that required the e-mail
+   before the forecast was removed.)
 6. The forecast **text is not shown automatically**. The button **הצגת התחזית בטקסט** (Show the forecast
    as text) opens it in a pop-up window.
 7. **בדיקה לתאריך לידה אחר** (Try another date of birth) returns to step 2.
+8. **Remembered on this device** ✅: after a forecast, the date of birth is kept in the visitor's browser
+   (`localStorage`, key `lpMoonVisitor`), and after a sign-up so is the e-mail. On the next visit the date
+   field starts with the saved date, and the sign-up box shows "נעדכן אתכם במייל ‹address› כשהתחזית משתנה"
+   straight away. A note under the date form says the date is kept only in the browser. **שכחו אותי במכשיר
+   הזה** (Forget me on this device), shown when something is saved, clears it. Nothing about this is sent to
+   the server. If the browser blocks storage, the page simply does not remember.
 
 ### 2.5 Test e-mail recipients admin (`/admin/recipients`) ✅
 
@@ -133,7 +146,7 @@ On the landing page (`/lp/moon`) the inputs are different:
 | Input | Required | Format and rules |
 |---|---|---|
 | Date of birth | Yes | `dd/mm/yyyy`, typed or picked from a calendar dialog. The field starts filled with the date 30 years before today (the visitor can change it), and the dialog opens on that date if the field was cleared; a real date, from 1900, not in the future |
-| E-mail | Yes | Standard address format, at most 254 characters. Saved in `tbl_landing_emails` (see section 7) |
+| E-mail | No (optional sign-up under the forecast video) | Standard address format, at most 254 characters. Saved in `tbl_landing_emails` (see section 7) |
 | Marketing consent | No | Checkbox, unticked by default. Saved with the e-mail (see section 7) |
 | Date, time, location | Not asked | The current moment is used; the browser's timezone is used only to display times |
 
@@ -230,9 +243,8 @@ to a feature that is still planned.
 
 1. **Sign step** (`POST /lp/moon/sign`): the date of birth gives the Sun sign (same rule as 5.5, at
    12:00 UTC). The wheel stops on that sign.
-2. **Forecast step** (`POST /lp/moon/forecast`), after the e-mail is validated:
-   - The e-mail and the consent choice are saved in `tbl_landing_emails` (section 7). If saving fails, the
-     visitor still gets the forecast and the failure is logged without the address.
+2. **Forecast step** (`POST /lp/moon/forecast`), requested while the wheel spins; it needs only the date of
+   birth:
    - The Moon's sign is taken for **the current moment** (server clock). No location is needed, because
      the Moon's sign at a given instant is the same everywhere.
    - **House** and **forecast group** follow exactly the rules of 5.5 (whole-sign houses from the Sun
@@ -244,6 +256,11 @@ to a feature that is still planned.
    `media/videos/video_demo_*.mp4`. ❓ See section 9.
 4. If the database is unavailable, the video and summary still appear, and the text pop-up says the text
    is not available right now.
+5. **E-mail sign-up step** (`POST /lp/moon/subscribe`), optional, from the form under the forecast video:
+   the e-mail is validated, and the e-mail, the consent choice and the **Sun sign** are saved in
+   `tbl_landing_emails` (section 7). The page sends the date of birth with the sign-up; the server uses it
+   only to work out the Sun sign and does not store it. If saving fails, the visitor still sees the confirmation message and the failure is logged
+   without the address.
 
 **Design system** (`static/landing/ds.css`, `static/landing/ds.js`): every landing field uses the same
 classes (`ds-field`, `ds-input`, `ds-btn`…) and the same validation rules, declared on the field
@@ -310,9 +327,12 @@ Rules:
 ## 7. Database interactions ✅
 
 - **Forecast texts are read-only.** The site never inserts, updates or deletes them, and stores nothing
-  about users' calculations. The date of birth is not stored.
+  about users' calculations. The date of birth is not stored on the server (the landing page keeps it only in
+  the visitor's own browser; see 2.4).
 - **Landing page e-mails** ✅. Each valid address is saved once, in lower
-  case, with the time it was first entered, in `tbl_landing_emails`. `marketing_consent` is true only after
+  case, with the time it was first entered, in `tbl_landing_emails`, together with the visitor's **Sun sign**
+  (`sun_sign`, for future personal update e-mails; a later sign-up replaces it; NULL for rows saved before
+  this column was added). `marketing_consent` is true only after
   the visitor ticks the checkbox, and a later submission without the tick does not clear it. Addresses saved
   before the checkbox existed stay false. The site sends nothing to these addresses. Marketing may be sent only
   where `marketing_consent` is true. There is no automatic unsubscribe ❌; requests go to the address in
@@ -321,7 +341,7 @@ Rules:
   `tbl_test_recipients`. The cron job (5.7) updates `last_run` and inserts a row into `tbl_test_email_log`
   for every attempt. These are the only other tables the site writes.
 - **Meta Pixel** ✅: when `META_PIXEL_ID` is set, `/lp/moon` loads the Pixel and sends `PageView` on load and
-  `Lead` once per visit after a valid e-mail. Automatic configuration is off, and the e-mail, date of birth and
+  `Lead` once per visit after a valid e-mail sign-up. Automatic configuration is off, and the e-mail, date of birth and
   forecast are not sent. No other page has the Pixel.
 - **Google Analytics 4** ✅: when `GA_MEASUREMENT_ID` holds a valid GA4 ID (`G-...`), every page loads the GA
   tag, which counts page views and Enhanced measurement events (scrolls, outbound clicks and similar). The site
@@ -471,12 +491,21 @@ audio files are not used.
 2. כשהסרטון מסתיים (או כשמדלגים עליו, או כשהוא לא נטען), הוא **הופך לגלגל מזלות** וטופס מבקש את
    **תאריך הלידה**.
 3. המבקר לוחץ על **גלו את התחזית האישית שלי**. הגלגל **מסתובב כ-4.5 שניות** ונעצר כשמזל השמש של המבקר מתחת למחוג.
-4. מופיעה תמונה של **ירון** עם ההודעה: "התחזית האישית שלכם מוכנה!" (ההודעה כבר אינה מזכירה את המזל; הגלגל
-   נעצר עליו רגע לפני כן), ואחריה "לצפייה בתחזית הזינו את כתובת המייל שלכם", ושדה **מייל**.
-5. אחרי הזנת מייל תקין, הגלגל הופך ל**סרטון התחזית**, וסיכום קצר מציין באיזה מזל הירח נמצא עכשיו,
-   באיזה בית זה עבור המבקר, ואת טווח הזמן.
+4. מיד אחרי הסיבוב (בלי צורך במייל), הגלגל הופך ל**סרטון התחזית**. כרטיס התחזית מציג את הסמל של **מזל השמש**
+   של המבקר (המזל שמופיע בכותרת), וסיכום קצר מציין באיזה מזל הירח נמצא
+   עכשיו, באיזה בית זה עבור המבקר, ואת טווח הזמן.
+5. מופיעה **הרשמה אופציונלית במייל** (בטלפון מיד מתחת לסרטון; במסכים רחבים מתחת לסיכום התחזית, לצד הסרטון,
+   כך שכל השלב נכנס במסך אחד ללא גלילה) עם הכותרת "רוצים לקבל עדכון כשהתחזית משתנה? השאירו אימייל",
+   שדה המייל, תיבת ההסכמה לדיוור, הכפתור **שלחו לי עדכונים** והודעת הפרטיות. אחרי מייל תקין הכותרת והטופס
+   מוחלפים בהודעה "נעדכן אתכם במייל ‹כתובת› כשהתחזית משתנה" ובכפתור **שינוי כתובת המייל**, שמציג שוב את הטופס
+   כשהכתובת כבר בתוכו. כתובת שהשתנתה נשמרת כשורה חדשה; הכתובת הקודמת נשארת. (השלב הקודם עם התמונה של ירון, שדרש מייל לפני התחזית, הוסר.)
 6. **טקסט התחזית לא מוצג אוטומטית.** הכפתור **הצגת התחזית בטקסט** פותח אותו בחלון קופץ.
 7. **בדיקה לתאריך לידה אחר** מחזיר לשלב 2.
+8. **זכירה במכשיר הזה** ✅: אחרי תחזית, תאריך הלידה נשמר בדפדפן של המבקר (`localStorage`, מפתח
+   `lpMoonVisitor`), ואחרי הרשמה גם המייל. בביקור הבא שדה התאריך מתחיל בתאריך השמור, ותיבת ההרשמה מציגה מיד
+   "נעדכן אתכם במייל ‹כתובת› כשהתחזית משתנה". הערה מתחת לטופס התאריך מציינת שהתאריך נשמר בדפדפן בלבד.
+   **שכחו אותי במכשיר הזה**, שמוצג כשיש משהו שמור, מוחק אותו. דבר מזה אינו נשלח לשרת. אם הדפדפן חוסם אחסון,
+   העמוד פשוט לא זוכר.
 
 ### 2.5 ניהול נמעני מיילים לבדיקה (`/admin/recipients`) ✅
 
@@ -514,7 +543,7 @@ audio files are not used.
 | קלט | חובה | פורמט וכללים |
 |---|---|---|
 | תאריך לידה | כן | `dd/mm/yyyy`, בהקלדה או בבחירה מחלון לוח שנה. השדה מתחיל כשהוא מלא בתאריך של 30 שנה לפני היום (המבקר יכול לשנות אותו), והחלון נפתח על התאריך הזה אם השדה נמחק; תאריך אמיתי, מ-1900, לא בעתיד |
-| מייל | כן | פורמט כתובת רגיל, עד 254 תווים. נשמר בטבלה `tbl_landing_emails` (ראו סעיף 7) |
+| מייל | לא (הרשמה אופציונלית מתחת לסרטון התחזית) | פורמט כתובת רגיל, עד 254 תווים. נשמר בטבלה `tbl_landing_emails` (ראו סעיף 7) |
 | הסכמה לדיוור | לא | תיבת סימון, לא מסומנת כברירת מחדל. נשמרת עם המייל (ראו סעיף 7) |
 | תאריך, שעה, מיקום | לא נשאלים | נעשה שימוש ברגע הנוכחי; אזור הזמן של הדפדפן משמש רק להצגת השעות |
 
@@ -608,9 +637,7 @@ audio files are not used.
 
 1. **שלב המזל** (`POST /lp/moon/sign`): תאריך הלידה נותן את מזל השמש (אותו כלל כמו ב-5.5, ב-12:00
    UTC). הגלגל נעצר על המזל הזה.
-2. **שלב התחזית** (`POST /lp/moon/forecast`), אחרי בדיקת תקינות המייל:
-   - המייל ובחירת ההסכמה נשמרים בטבלה `tbl_landing_emails` (סעיף 7). אם השמירה נכשלת, המבקר עדיין מקבל את
-     התחזית, והכשל נרשם ביומן ללא הכתובת.
+2. **שלב התחזית** (`POST /lp/moon/forecast`), נשלח בזמן שהגלגל מסתובב; נדרש רק תאריך הלידה:
    - מזל הירח נלקח עבור **הרגע הנוכחי** (שעון השרת). אין צורך במיקום, כי מזל הירח ברגע נתון זהה
      בכל מקום.
    - **הבית** ו**קבוצת התחזית** נקבעים בדיוק לפי הכללים של 5.5 (בתים של מזל שלם ממזל השמש; קבוצה 1
@@ -621,6 +648,10 @@ audio files are not used.
 3. **סרטון התחזית:** עדיין אין סרטון לכל תחזית, ולכן השרת בוחר **אחד באקראי** מתוך
    `media/videos/video_demo_*.mp4`. ❓ ראו סעיף 9.
 4. אם מסד הנתונים אינו זמין, הסרטון והסיכום עדיין מוצגים, והחלון הקופץ מודיע שהטקסט אינו זמין כרגע.
+5. **שלב ההרשמה במייל** (`POST /lp/moon/subscribe`), אופציונלי, מהטופס שמתחת לסרטון התחזית: המייל נבדק,
+   והמייל, בחירת ההסכמה ו**מזל השמש** נשמרים בטבלה `tbl_landing_emails` (סעיף 7). העמוד שולח את תאריך הלידה
+   עם ההרשמה; השרת משתמש בו רק כדי לחשב את מזל השמש ואינו שומר אותו. אם השמירה נכשלת, המבקר עדיין רואה את
+   הודעת האישור, והכשל נרשם ביומן ללא הכתובת.
 
 **מערכת עיצוב** (`static/landing/ds.css`, `static/landing/ds.js`): כל שדות עמוד הנחיתה משתמשים באותן
 מחלקות (`ds-field`, `ds-input`, `ds-btn`…) ובאותם כללי בדיקה, שמוגדרים על השדה עצמו
@@ -684,9 +715,10 @@ audio files are not used.
 ## 7. עבודה מול מסד הנתונים ✅
 
 - **טקסטי התחזית לקריאה בלבד.** האתר לעולם אינו מוסיף, מעדכן או מוחק אותם, ואינו שומר דבר על החישובים
-  של המשתמשים. תאריך הלידה אינו נשמר.
+  של המשתמשים. תאריך הלידה אינו נשמר בשרת (עמוד הנחיתה שומר אותו רק בדפדפן של המבקר; ראו 2.4).
 - **כתובות המייל מעמוד הנחיתה** ✅. כל כתובת תקינה נשמרת פעם אחת, באותיות
-  קטנות, עם מועד ההזנה הראשון, בטבלה `tbl_landing_emails`. הערך `marketing_consent` הופך לאמת רק אחרי שהמבקר
+  קטנות, עם מועד ההזנה הראשון, בטבלה `tbl_landing_emails`, יחד עם **מזל השמש** של המבקר (`sun_sign`, לצורך
+  מיילי עדכון אישיים בעתיד; הרשמה מאוחרת יותר מחליפה אותו; NULL בשורות שנשמרו לפני שהעמודה נוספה). הערך `marketing_consent` הופך לאמת רק אחרי שהמבקר
   מסמן את התיבה, ושליחה מאוחרת יותר ללא סימון אינה מבטלת אותו. כתובות שנשמרו לפני שנוספה התיבה נשארות עם הערך
   שקר. האתר אינו שולח דבר לכתובות האלה. מותר לשלוח דיוור רק כאשר `marketing_consent` הוא אמת. אין הסרה אוטומטית
   מרשימת הדיוור ❌; בקשות מגיעות לכתובת שב-`EMAIL_OF_CONSENT`, המוצגת בהודעה שבעמוד. ❓ ראו סעיף 9.
@@ -694,7 +726,7 @@ audio files are not used.
   משימת ה-Cron ‏(5.7) מעדכנת את `last_run` ומוסיפה שורה ל-`tbl_test_email_log` בכל ניסיון. אלה הטבלאות
   היחידות הנוספות שהאתר כותב אליהן.
 - **הפיקסל של Meta** ✅: כאשר `META_PIXEL_ID` מוגדר, העמוד `/lp/moon` טוען את הפיקסל ושולח `PageView` בטעינה
-  ו-`Lead` פעם אחת בכל ביקור אחרי הזנת מייל תקין. התצורה האוטומטית כבויה, והמייל, תאריך הלידה והתחזית אינם נשלחים.
+  ו-`Lead` פעם אחת בכל ביקור אחרי הרשמה עם מייל תקין. התצורה האוטומטית כבויה, והמייל, תאריך הלידה והתחזית אינם נשלחים.
   בשאר העמודים אין פיקסל.
 - **Google Analytics 4** ✅: כאשר `GA_MEASUREMENT_ID` מכיל מזהה GA4 תקין (`G-...`), כל עמודי האתר טוענים את תג
   GA, שסופר צפיות בעמודים ואירועי Enhanced measurement (גלילה, לחיצה על קישורים חיצוניים וכדומה). בנוסף האתר שולח

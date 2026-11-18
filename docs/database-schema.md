@@ -53,6 +53,9 @@ public.tbl_landing_emails
   email      text        NOT NULL UNIQUE CHECK (char_length(email) <= 254 AND email = lower(email))
   created_at timestamptz NOT NULL DEFAULT now()
   marketing_consent boolean NOT NULL DEFAULT false  -- True once the visitor ticks the consent checkbox; send marketing only to these
+  sun_sign   text        NULL CHECK (sun_sign IN ('Aries', ..., 'Pisces'))  -- English name, from the date of birth at sign-up
+                                                  -- (the date itself is not stored); NULL for rows saved before it existed.
+                                                  -- Added by docs/sql/2026-11-18_landing_emails_sun_sign.sql
 
 public.tbl_test_recipients
   -- Test recipients of the scheduled Moon of Transit e-mails (send_emails.py, Render Cron Job every 5 minutes).
