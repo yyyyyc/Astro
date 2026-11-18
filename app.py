@@ -748,8 +748,12 @@ def moon_transit_for_dob(dob, now_utc):
     """Moon of Transit for a date of birth at now_utc: the Moon's period, the Sun sign, the house of the
     Moon counted from the Sun sign (whole signs) and the forecast group. Location is not needed: the
     Moon's sign at a moment is the same everywhere; a timezone only formats the times."""
+    return moon_transit_for_sun_sign(sun_sign_on(dob), now_utc)
+
+
+def moon_transit_for_sun_sign(sun_sign, now_utc):
+    """Same as moon_transit_for_dob, from a Sun sign that is already known (English name)."""
     period = moon_period_at(now_utc)
-    sun_sign = sun_sign_on(dob)
     return {
         "period": period,
         "sun_sign": sun_sign,
@@ -789,6 +793,27 @@ LANDING_INTRO_VIDEO = "videos/Intro_for_secondary_moon.mp4"
 LANDING_FORECAST_VIDEO_GLOB = os.path.join(MEDIA_DIR, "videos", "video_demo_*.mp4")
 LANDING_DEFAULT_TZ = "Asia/Jerusalem"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
+DEFAULT_SITE_URL = "https://tertiary-progression.onrender.com"
+
+
+def site_url():
+    """Public base URL for links in e-mails (the cron job has no request to take it from)."""
+    return (os.environ.get("SITE_URL", "").strip() or DEFAULT_SITE_URL).rstrip("/")
+
+
+def unsubscribe_token(landing_email_id):
+    """Signed token for a subscriber's unsubscribe link, or None when UNSUBSCRIBE_SECRET is not set.
+    Signing the row id means a link cannot be guessed or changed to unsubscribe someone else."""
+    secret = os.environ.get("UNSUBSCRIBE_SECRET", "").strip()
+    if not secret:
+        return None
+    msg = f"unsubscribe:{landing_email_id}".encode()
+    return hmac.new(secret.encode(), msg, "sha256").hexdigest()[:32]
+
+
+def unsubscribe_url(landing_email_id):
+    token = unsubscribe_token(landing_email_id)
+    return f"{site_url()}/lp/moon/unsubscribe/{landing_email_id}/{token}" if token else None
 
 ZODIAC_SIGNS_HE = {
     "Aries": "טלה", "Taurus": "שור", "Gemini": "תאומים", "Cancer": "סרטן",
@@ -844,7 +869,12 @@ def save_landing_email(email, marketing_consent, sun_sign=None):
                     VALUES (:email, :consent, :sun_sign)
                     ON CONFLICT (email) DO UPDATE
                     SET marketing_consent = tbl_landing_emails.marketing_consent OR EXCLUDED.marketing_consent,
-                        sun_sign = COALESCE(EXCLUDED.sun_sign, tbl_landing_emails.sun_sign)
+                        sun_sign = COALESCE(EXCLUDED.sun_sign, tbl_landing_emails.sun_sign),
+                        -- signing up again after unsubscribing starts updates afresh from the next Moon sign
+                        last_update_key = CASE WHEN tbl_landing_emails.updates_active
+                                               THEN tbl_landing_emails.last_update_key END,
+                        updates_active = true,
+                        unsubscribed_at = NULL
                     """
                 ),
                 {"email": email.lower(), "consent": marketing_consent, "sun_sign": sun_sign},
@@ -871,6 +901,36 @@ def landing_moon_subscribe():
     dob = parse_landing_dob(data.get("dob"))  # used only to work out the Sun sign; not stored
     save_landing_email(email, data.get("marketing_consent") is True, sun_sign_on(dob) if dob else None)
     return jsonify({"ok": True})
+
+
+@app.route("/lp/moon/unsubscribe/<int:landing_email_id>/<token>", methods=["GET", "POST"])
+def landing_moon_unsubscribe(landing_email_id, token):
+    """GET shows a confirm button (link scanners in mail clients open links, so a GET must change
+    nothing); POST unsubscribes. Mail clients' one-click unsubscribe (List-Unsubscribe-Post) also POSTs here."""
+    expected = unsubscribe_token(landing_email_id)
+    if expected is None or not hmac.compare_digest(expected, token):
+        return render_template("landing_unsubscribe.html", state="invalid"), 404
+    if request.method == "GET":
+        return render_template("landing_unsubscribe.html", state="confirm")
+    engine = get_engine()
+    if engine is None:
+        return render_template("landing_unsubscribe.html", state="error"), 503
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    UPDATE tbl_landing_emails
+                    SET updates_active = false, unsubscribed_at = COALESCE(unsubscribed_at, now())
+                    WHERE id = :id
+                    """
+                ),
+                {"id": landing_email_id},
+            )
+    except Exception as exc:
+        app.logger.error("Could not unsubscribe landing e-mail %s: %s", landing_email_id, type(exc).__name__)
+        return render_template("landing_unsubscribe.html", state="error"), 500
+    return render_template("landing_unsubscribe.html", state="done")
 
 
 @app.route("/lp/moon/forecast", methods=["POST"])

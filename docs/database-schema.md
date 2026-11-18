@@ -56,6 +56,27 @@ public.tbl_landing_emails
   sun_sign   text        NULL CHECK (sun_sign IN ('Aries', ..., 'Pisces'))  -- English name, from the date of birth at sign-up
                                                   -- (the date itself is not stored); NULL for rows saved before it existed.
                                                   -- Added by docs/sql/2026-11-18_landing_emails_sun_sign.sql
+  updates_active  boolean     NOT NULL DEFAULT true  -- false after unsubscribing from forecast updates; a new sign-up sets it back
+  unsubscribed_at timestamptz NULL                   -- last unsubscribe from updates; cleared by a new sign-up
+  last_update_key text        NULL                   -- start (UTC, 'YYYY-MM-DDTHH:MMZ') of the Moon sign period last sent
+                                                     -- (or first seen in); claimed before sending. Added by
+                                                     -- docs/sql/2026-11-18_landing_updates.sql
+
+public.tbl_landing_email_log
+  -- One row per forecast update e-mail attempt to a landing page subscriber (send_emails.py, 5.8).
+  id                  bigint      NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY
+  landing_email_id    bigint      NULL REFERENCES tbl_landing_emails(id) ON DELETE SET NULL
+  email               text        NOT NULL                        -- copied, so the log survives a deleted subscriber
+  update_key          text        NOT NULL                        -- Moon sign period start (UTC)
+  sent_at             timestamptz NOT NULL DEFAULT now()          -- indexed (DESC)
+  status              text        NOT NULL CHECK (status IN ('sent', 'failed', 'dry_run'))
+  moon_sign           text        NULL                            -- English sign name
+  sun_sign            text        NULL
+  house               smallint    NULL                            -- 1-12, counted from the Sun sign
+  forecast_group      smallint    NULL                            -- 1-2
+  subject             text        NULL
+  provider_message_id text        NULL                            -- Brevo message id
+  error               text        NULL
 
 public.tbl_test_recipients
   -- Test recipients of the scheduled Moon of Transit e-mails (send_emails.py, Render Cron Job every 5 minutes).

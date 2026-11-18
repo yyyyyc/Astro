@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>הסרה מעדכוני התחזית</title>
+  <meta name="theme-color" content="#0b0620" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Frank+Ruhl+Libre:wght@700&display=swap" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='landing/ds.css') }}" />
+  <style>
+    body { padding: 16px; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; }
+    .card { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: var(--ds-space-4); text-align: center; }
+    .brand { color: var(--ds-color-gold); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main class="card ds-card">
+    <span class="brand"><span class="ds-glyph" aria-hidden="true">☽&#xFE0E;</span> ירח בטרנזיט</span>
+    {% if state == "confirm" %}
+      <h1 class="ds-heading ds-heading--lg">להפסיק את עדכוני התחזית?</h1>
+      <p class="ds-text">לא נשלח אליכם יותר מיילים על שינויים בתחזית הירח.</p>
+      <form method="post">
+        <button type="submit" class="ds-btn ds-btn--primary ds-btn--block">כן, הסירו אותי</button>
+      </form>
+    {% elif state == "done" %}
+      <h1 class="ds-heading ds-heading--lg">הוסרתם מהעדכונים</h1>
+      <p class="ds-text">לא נשלח אליכם יותר מיילים על שינויים בתחזית. אפשר להירשם שוב בכל עת בעמוד התחזית.</p>
+      <a class="ds-btn ds-btn--ghost ds-btn--block" href="/lp/moon">לעמוד התחזית</a>
+    {% elif state == "error" %}
+      <h1 class="ds-heading ds-heading--lg">משהו השתבש</h1>
+      <p class="ds-text">לא הצלחנו להשלים את ההסרה כרגע. נסו שוב בעוד כמה דקות.</p>
+    {% else %}
+      <h1 class="ds-heading ds-heading--lg">הקישור אינו תקין</h1>
+      <p class="ds-text">ייתכן שהקישור הועתק באופן חלקי. נסו ללחוץ שוב על קישור ההסרה שבמייל.</p>
+    {% endif %}
+  </main>
+</body>
+</html>

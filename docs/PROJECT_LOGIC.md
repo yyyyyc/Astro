@@ -31,6 +31,7 @@ It answers four questions, plus a Hebrew landing page for ad campaigns:
 | Moon of Transit | Moon of Transit page | Which sign is the real Moon in right now, when does it move on, and what does that mean for me? | ✅ |
 | Moon of Transit (landing) | `/lp/moon` | Same as Moon of Transit, as a short guided funnel in Hebrew for visitors from ads (e.g. Facebook) | ✅ |
 | Scheduled e-mails (test) | Render Cron Job + `/admin/recipients` | Sends the current Moon of Transit forecast by e-mail to test recipients on the days and times they chose | ✅ |
+| Forecast update e-mails | Render Cron Job + `/lp/moon/unsubscribe/…` | Sends landing page subscribers their own forecast once per Moon sign; off until `LANDING_UPDATES` is set | ✅ |
 
 The site is **free and open**. There are no user accounts or payments (see section 8). The only login is the
 password-protected admin page (2.5).
@@ -302,6 +303,38 @@ due and changes nothing. The run exits with an error code when any send fails, s
 failed. `marketing_consent` is stored but does not affect sending yet. Times are stored in the database in
 UTC.
 
+### 5.8 Forecast update e-mails to landing page subscribers ✅
+
+The same cron run (`send_emails.py`) then runs a second, independent job, switched by **`LANDING_UPDATES`**:
+`off` (default, nothing happens), `dry_run` (everything except the send, logged as `dry_run`) or `on`.
+
+1. **Recipients:** every row of `tbl_landing_emails` with `updates_active` true and a known `sun_sign`,
+   **whether or not `marketing_consent` is ticked** (they asked for updates by signing up; the e-mails
+   carry only the forecast, no offers). Rows saved before `sun_sign` existed are skipped.
+2. **When:** once per **Moon sign** (about every 2.5 days), not at the mid-sign group change. E-mails go out
+   only between **08:00 and 21:00 Israel time**; a change at night waits for 08:00.
+3. **Which update:** `last_update_key` holds the start (UTC, to the minute) of the Moon sign period last sent.
+   A stored start within 1 hour of the current one counts as the same period (the start is computed to about
+   a second, so two runs may differ slightly). A subscriber seen for the **first time** is only marked, with no
+   e-mail: they have just seen the current forecast on the page, so their first update comes with the next sign.
+4. **Claim before send:** `last_update_key` is moved to the new period only if no other run moved it first,
+   so a Moon sign is never sent twice.
+5. **Content (Hebrew):** subject "הירח עבר למזל ‹Moon› – התחזית שלכם, בני מזל ‹Sun›"; which house that is for
+   the subscriber and until when (Israel time); the forecast text for house + group at the moment of sending
+   (5.5 rules); a link to `/lp/moon`; and an unsubscribe link. Sent through Brevo like 5.7, with the
+   `List-Unsubscribe` and `List-Unsubscribe-Post` (one-click) headers.
+6. **Log:** one row per attempt in `tbl_landing_email_log`.
+7. **Unsubscribe** (`/lp/moon/unsubscribe/<id>/<token>`): the token is an HMAC of the row id with
+   `UNSUBSCRIBE_SECRET`, so a link cannot be guessed or changed to another person. Opening the link shows a
+   confirm button (mail scanners open links, so opening alone changes nothing); confirming, or a mail client's
+   one-click unsubscribe, sets `updates_active` false and `unsubscribed_at`. Signing up again on the page sets
+   `updates_active` back to true and restarts updates from the next Moon sign. With `LANDING_UPDATES=on` and no
+   `UNSUBSCRIBE_SECRET`, the job sends nothing.
+8. `SITE_URL` (default `https://tertiary-progression.onrender.com`) is the base of the links in the e-mail.
+
+❌ The sender is still a Gmail address. For delivery to inboxes, a domain verified in Brevo is needed before
+`LANDING_UPDATES=on`. ❓ See section 9.
+
 ## 6. Mapping calculation results to forecast texts ✅
 
 Each technique has a mapping table and a texts table. Many results can share the same text.
@@ -331,15 +364,20 @@ Rules:
   the visitor's own browser; see 2.4).
 - **Landing page e-mails** ✅. Each valid address is saved once, in lower
   case, with the time it was first entered, in `tbl_landing_emails`, together with the visitor's **Sun sign**
-  (`sun_sign`, for future personal update e-mails; a later sign-up replaces it; NULL for rows saved before
+  (`sun_sign`, for the personal update e-mails in 5.8; a later sign-up replaces it; NULL for rows saved before
   this column was added). `marketing_consent` is true only after
   the visitor ticks the checkbox, and a later submission without the tick does not clear it. Addresses saved
-  before the checkbox existed stay false. The site sends nothing to these addresses. Marketing may be sent only
-  where `marketing_consent` is true. There is no automatic unsubscribe ❌; requests go to the address in
-  `EMAIL_OF_CONSENT`, shown in the page's notice. ❓ See section 9.
+  before the checkbox existed stay false. Forecast updates (5.8) go to every active subscriber with a known
+  Sun sign; marketing (offers) may be sent only where `marketing_consent` is true. Unsubscribing from updates
+  is automatic through the link in each update ✅ (`updates_active`, `unsubscribed_at`); there is no automatic
+  withdrawal of marketing consent or deletion ❌; those requests go to the address in `EMAIL_OF_CONSENT`,
+  shown in the page's notice. ❓ See section 9.
 - **Test e-mail recipients and send log** ✅: the admin page (2.5) adds, edits and deletes rows in
   `tbl_test_recipients`. The cron job (5.7) updates `last_run` and inserts a row into `tbl_test_email_log`
-  for every attempt. These are the only other tables the site writes.
+  for every attempt.
+- **Update e-mails** ✅: the cron job (5.8) updates `last_update_key` in `tbl_landing_emails` and inserts a row
+  into `tbl_landing_email_log` for every attempt; the unsubscribe page updates `updates_active` and
+  `unsubscribed_at`. These are the only other tables the site writes.
 - **Meta Pixel** ✅: when `META_PIXEL_ID` is set, `/lp/moon` loads the Pixel and sends `PageView` on load and
   `Lead` once per visit after a valid e-mail sign-up. Automatic configuration is off, and the e-mail, date of birth and
   forecast are not sent. No other page has the Pixel.
@@ -352,8 +390,8 @@ Rules:
   `authenticated`) have no access. The site connects with its own database role through `ASTRO_DB_URL`.
 - Database: Supabase PostgreSQL. The connection comes from the `ASTRO_DB_URL` environment variable.
   If it is missing, forecasts show an error, but calculations still work.
-- Tables used: the four mapping/text pairs in section 6, `tbl_landing_emails`, `tbl_test_recipients`,
-  `tbl_test_email_log`, and `tbl_signs` (sign names; used only by the `/signs` debug page).
+- Tables used: the four mapping/text pairs in section 6, `tbl_landing_emails`, `tbl_landing_email_log`,
+  `tbl_test_recipients`, `tbl_test_email_log`, and `tbl_signs` (sign names; used only by the `/signs` debug page).
 - Calculations themselves do **not** use the database. Only forecast texts come from it.
 - Schema details: `docs/database-schema.md`.
 
@@ -412,9 +450,10 @@ audio files are not used.
    e-mails go to a mailing service?
 10. **Landing page forecast videos** are a random demo video. How will each forecast (house + group)
     map to its own video, and will the videos have captions?
-11. **Scheduled e-mails after the test:** which recipients will get them in production (e.g.
-    `tbl_landing_emails` with `marketing_consent`)? This needs an unsubscribe link, a verified sending domain,
-    a rule for `forecast_type`, and English forecast texts if `en` recipients should get English. (5.7)
+11. **Scheduled e-mails:** the production recipients are decided (landing page subscribers, 5.8) and the
+    unsubscribe link exists. Still open: a **verified sending domain** in Brevo (the sender is a Gmail address),
+    the future of the test e-mails (5.7) and their `forecast_type` rule, and English forecast texts if `en`
+    recipients should get English.
 
 ---
 
@@ -439,6 +478,7 @@ audio files are not used.
 | Moon of Transit ‏(ירח בטרנזיט) | עמוד הירח בטרנזיט | באיזה מזל נמצא הירח האמיתי עכשיו, מתי יעבור הלאה, ומה המשמעות עבורי? | ✅ |
 | ירח בטרנזיט (עמוד נחיתה) | `/lp/moon` | כמו ירח בטרנזיט, כתהליך קצר ומודרך בעברית למבקרים שמגיעים ממודעות (למשל פייסבוק) | ✅ |
 | מיילים מתוזמנים (בדיקה) | Render Cron Job + ‏`/admin/recipients` | שולח במייל את תחזית הירח בטרנזיט הנוכחית לנמעני בדיקה בימים ובשעות שבחרו | ✅ |
+| מיילי עדכון תחזית | Render Cron Job + ‏`/lp/moon/unsubscribe/…` | שולח לנרשמים בעמוד הנחיתה את התחזית האישית שלהם פעם אחת בכל מזל של הירח; כבוי עד שמגדירים `LANDING_UPDATES` | ✅ |
 
 האתר **חינמי ופתוח**. אין חשבונות משתמש או תשלומים (ראו סעיף 8). ההתחברות היחידה היא לעמוד הניהול המוגן
 בסיסמה (2.5).
@@ -690,6 +730,36 @@ audio files are not used.
 משנה דבר. הריצה מסתיימת עם קוד שגיאה כשאחת השליחות נכשלת, כך ש-Render מסמן את הריצה ככושלת.
 `marketing_consent` נשמר אבל עדיין אינו משפיע על השליחה. הזמנים נשמרים במסד הנתונים ב-UTC.
 
+### 5.8 מיילי עדכון תחזית לנרשמים בעמוד הנחיתה ✅
+
+אותה ריצת Cron ‏(`send_emails.py`) מריצה אחר כך משימה שנייה ועצמאית, שנשלטת על ידי **`LANDING_UPDATES`**:
+`off` (ברירת מחדל, לא קורה דבר), `dry_run` (הכול חוץ מהשליחה, נרשם כ-`dry_run`) או `on`.
+
+1. **נמענים:** כל שורה ב-`tbl_landing_emails` שבה `updates_active` אמת ו-`sun_sign` ידוע, **בין אם
+   `marketing_consent` מסומן ובין אם לא** (הם ביקשו עדכונים כשנרשמו; המיילים כוללים רק את התחזית, ללא הצעות).
+   שורות שנשמרו לפני שנוספה העמודה `sun_sign` מדולגות.
+2. **מתי:** פעם אחת בכל **מזל של הירח** (בערך כל 2.5 ימים), לא במעבר הקבוצה באמצע המזל. מיילים נשלחים רק בין
+   **08:00 ל-21:00 שעון ישראל**; שינוי בלילה ממתין ל-08:00.
+3. **איזה עדכון:** ‏`last_update_key` שומר את תחילת תקופת המזל של הירח שנשלחה לאחרונה (UTC, ברמת הדקה).
+   תחילה שמורה בטווח של שעה מהתחילה הנוכחית נחשבת לאותה תקופה (התחילה מחושבת בדיוק של כשנייה, ולכן שתי ריצות
+   עשויות להיות שונות מעט). נרשם שנראה **בפעם הראשונה** רק מסומן, בלי מייל: הוא בדיוק ראה את התחזית הנוכחית
+   בעמוד, ולכן העדכון הראשון שלו מגיע עם המזל הבא.
+4. **תפיסה לפני שליחה:** ‏`last_update_key` עובר לתקופה החדשה רק אם אף ריצה אחרת לא העבירה אותו קודם, כך
+   שמזל של הירח לעולם אינו נשלח פעמיים.
+5. **תוכן (בעברית):** נושא "הירח עבר למזל ‹ירח› – התחזית שלכם, בני מזל ‹שמש›"; איזה בית זה עבור הנרשם ועד מתי
+   (שעון ישראל); טקסט התחזית לפי בית + קבוצה ברגע השליחה (כללי 5.5); קישור ל-`/lp/moon`; וקישור הסרה. נשלח
+   דרך Brevo כמו ב-5.7, עם הכותרות `List-Unsubscribe` ו-`List-Unsubscribe-Post` (הסרה בלחיצה אחת).
+6. **יומן:** שורה אחת לכל ניסיון בטבלה `tbl_landing_email_log`.
+7. **הסרה** (`/lp/moon/unsubscribe/<id>/<token>`): הטוקן הוא HMAC של מזהה השורה עם `UNSUBSCRIBE_SECRET`, כך
+   שאי אפשר לנחש קישור או לשנות אותו לאדם אחר. פתיחת הקישור מציגה כפתור אישור (סורקי דואר פותחים קישורים, ולכן
+   פתיחה לבדה לא משנה דבר); האישור, או הסרה בלחיצה אחת מתוכנת הדואר, מגדירים את `updates_active` כשקר וממלאים
+   את `unsubscribed_at`. הרשמה מחדש בעמוד מחזירה את `updates_active` לאמת ומתחילה את העדכונים מחדש מהמזל הבא.
+   כאשר `LANDING_UPDATES=on` ואין `UNSUBSCRIBE_SECRET`, המשימה לא שולחת דבר.
+8. ‏`SITE_URL` (ברירת מחדל `https://tertiary-progression.onrender.com`) הוא הבסיס של הקישורים במייל.
+
+❌ השולח הוא עדיין כתובת Gmail. כדי שהמיילים יגיעו לתיבת הדואר הנכנס, נדרש דומיין מאומת ב-Brevo לפני
+`LANDING_UPDATES=on`. ❓ ראו סעיף 9.
+
 ## 6. מיפוי תוצאות החישוב לטקסטי תחזית ✅
 
 לכל שיטה יש טבלת מיפוי וטבלת טקסטים. תוצאות רבות יכולות לחלוק את אותו טקסט.
@@ -718,12 +788,16 @@ audio files are not used.
   של המשתמשים. תאריך הלידה אינו נשמר בשרת (עמוד הנחיתה שומר אותו רק בדפדפן של המבקר; ראו 2.4).
 - **כתובות המייל מעמוד הנחיתה** ✅. כל כתובת תקינה נשמרת פעם אחת, באותיות
   קטנות, עם מועד ההזנה הראשון, בטבלה `tbl_landing_emails`, יחד עם **מזל השמש** של המבקר (`sun_sign`, לצורך
-  מיילי עדכון אישיים בעתיד; הרשמה מאוחרת יותר מחליפה אותו; NULL בשורות שנשמרו לפני שהעמודה נוספה). הערך `marketing_consent` הופך לאמת רק אחרי שהמבקר
+  מיילי העדכון האישיים שבסעיף 5.8; הרשמה מאוחרת יותר מחליפה אותו; NULL בשורות שנשמרו לפני שהעמודה נוספה). הערך `marketing_consent` הופך לאמת רק אחרי שהמבקר
   מסמן את התיבה, ושליחה מאוחרת יותר ללא סימון אינה מבטלת אותו. כתובות שנשמרו לפני שנוספה התיבה נשארות עם הערך
-  שקר. האתר אינו שולח דבר לכתובות האלה. מותר לשלוח דיוור רק כאשר `marketing_consent` הוא אמת. אין הסרה אוטומטית
-  מרשימת הדיוור ❌; בקשות מגיעות לכתובת שב-`EMAIL_OF_CONSENT`, המוצגת בהודעה שבעמוד. ❓ ראו סעיף 9.
+  שקר. עדכוני תחזית (5.8) נשלחים לכל נרשם פעיל שמזל השמש שלו ידוע; דיוור (הצעות) מותר רק כאשר `marketing_consent`
+  הוא אמת. ההסרה מהעדכונים אוטומטית דרך הקישור שבכל עדכון ✅ (`updates_active`, ‏`unsubscribed_at`); אין ביטול
+  אוטומטי של ההסכמה לדיוור או מחיקה ❌; בקשות כאלה מגיעות לכתובת שב-`EMAIL_OF_CONSENT`, המוצגת בהודעה שבעמוד.
+  ❓ ראו סעיף 9.
 - **נמעני מיילים לבדיקה ויומן שליחות** ✅: עמוד הניהול (2.5) מוסיף, עורך ומוחק שורות ב-`tbl_test_recipients`.
-  משימת ה-Cron ‏(5.7) מעדכנת את `last_run` ומוסיפה שורה ל-`tbl_test_email_log` בכל ניסיון. אלה הטבלאות
+  משימת ה-Cron ‏(5.7) מעדכנת את `last_run` ומוסיפה שורה ל-`tbl_test_email_log` בכל ניסיון.
+- **מיילי עדכון** ✅: משימת ה-Cron ‏(5.8) מעדכנת את `last_update_key` ב-`tbl_landing_emails` ומוסיפה שורה
+  ל-`tbl_landing_email_log` בכל ניסיון; עמוד ההסרה מעדכן את `updates_active` ו-`unsubscribed_at`. אלה הטבלאות
   היחידות הנוספות שהאתר כותב אליהן.
 - **הפיקסל של Meta** ✅: כאשר `META_PIXEL_ID` מוגדר, העמוד `/lp/moon` טוען את הפיקסל ושולח `PageView` בטעינה
   ו-`Lead` פעם אחת בכל ביקור אחרי הרשמה עם מייל תקין. התצורה האוטומטית כבויה, והמייל, תאריך הלידה והתחזית אינם נשלחים.
@@ -737,7 +811,7 @@ audio files are not used.
   `authenticated`) אין גישה. האתר מתחבר עם תפקיד מסד הנתונים שלו דרך `ASTRO_DB_URL`.
 - מסד הנתונים: Supabase PostgreSQL. פרטי החיבור נלקחים ממשתנה הסביבה `ASTRO_DB_URL`.
   אם הוא חסר, התחזיות מציגות שגיאה, אבל החישובים ממשיכים לעבוד.
-- טבלאות בשימוש: ארבעת זוגות טבלאות המיפוי והטקסטים שבסעיף 6, `tbl_landing_emails`, `tbl_test_recipients`,
+- טבלאות בשימוש: ארבעת זוגות טבלאות המיפוי והטקסטים שבסעיף 6, `tbl_landing_emails`, `tbl_landing_email_log`, `tbl_test_recipients`,
   `tbl_test_email_log`, ו-`tbl_signs` (שמות המזלות; משמשת רק את עמוד הבדיקה `/signs`).
 - החישובים עצמם **אינם** משתמשים במסד הנתונים. רק טקסטי התחזית מגיעים ממנו.
 - פרטי המבנה: `docs/database-schema.md`.
@@ -795,8 +869,8 @@ audio files are not used.
    Analytics לפני שהמבקר קרא את ההודעה או הסכים לעוגיות (במיוחד עבור מבקרים מאירופה)? הנוסח דורש בדיקה משפטית. האם הכתובות יועברו לשירות דיוור?
 10. **סרטוני התחזית בעמוד הנחיתה** הם סרטון דוגמה אקראי. איך כל תחזית (בית + קבוצה) תמופה לסרטון
     משלה, והאם יהיו לסרטונים כתוביות?
-11. **מיילים מתוזמנים אחרי הבדיקה:** מי יקבל אותם בסביבת הייצור (למשל `tbl_landing_emails` עם
-    `marketing_consent`)? נדרשים קישור הסרה, דומיין שולח מאומת, כלל עבור `forecast_type`, וטקסטי תחזית באנגלית
-    אם נמעני `en` אמורים לקבל אנגלית. (5.7)
+11. **מיילים מתוזמנים:** נמעני הייצור הוחלטו (הנרשמים בעמוד הנחיתה, 5.8) וקישור ההסרה קיים. עדיין פתוח:
+    **דומיין שולח מאומת** ב-Brevo (השולח הוא כתובת Gmail), עתיד מיילי הבדיקה (5.7) והכלל עבור `forecast_type`,
+    וטקסטי תחזית באנגלית אם נמעני `en` אמורים לקבל אנגלית.
 
 </div>
