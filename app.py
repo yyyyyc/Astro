@@ -802,19 +802,32 @@ def site_url():
     return (os.environ.get("SITE_URL", "").strip() or DEFAULT_SITE_URL).rstrip("/")
 
 
-def unsubscribe_token(landing_email_id):
-    """Signed token for a subscriber's unsubscribe link, or None when UNSUBSCRIBE_SECRET is not set.
-    Signing the row id means a link cannot be guessed or changed to unsubscribe someone else."""
+def subscriber_token(purpose, landing_email_id):
+    """Signed token for a subscriber's link ("unsubscribe" or "visit"), or None when UNSUBSCRIBE_SECRET is
+    not set. Signing the row id means a link cannot be guessed or changed to another person, and the purpose
+    is signed too, so one kind of link can never be used as the other."""
     secret = os.environ.get("UNSUBSCRIBE_SECRET", "").strip()
     if not secret:
         return None
-    msg = f"unsubscribe:{landing_email_id}".encode()
+    msg = f"{purpose}:{landing_email_id}".encode()
     return hmac.new(secret.encode(), msg, "sha256").hexdigest()[:32]
+
+
+def unsubscribe_token(landing_email_id):
+    return subscriber_token("unsubscribe", landing_email_id)
 
 
 def unsubscribe_url(landing_email_id):
     token = unsubscribe_token(landing_email_id)
     return f"{site_url()}/lp/moon/unsubscribe/{landing_email_id}/{token}" if token else None
+
+
+def visit_url(landing_email_id):
+    """Personal link to /lp/moon used in e-mails: the page opens with the subscriber's forecast and
+    subscribed state on any device. The code is in the fragment (#), which browsers never send to the
+    server, and the page removes it before analytics load."""
+    token = subscriber_token("visit", landing_email_id)
+    return f"{site_url()}/lp/moon#s={landing_email_id}.{token}" if token else None
 
 
 # tbl_landing_emails.last_update_key: the start of a Moon sign period, in UTC, to the minute
@@ -894,11 +907,14 @@ def parse_landing_dob(value):
 def save_landing_email(email, marketing_consent, sun_sign=None):
     """Store a landing page e-mail once, in lower case, with the visitor's Sun sign (English name; the
     date of birth itself is never stored). Consent, once given, is not cleared by a later submission
-    without the checkbox; a later submission with a sign replaces the stored sign. A new or returning
-    (previously unsubscribed) subscriber is marked as having seen the current Moon sign, so updates start
-    with the next one. A failure is logged without the address and never blocks the visitor.
+    without the checkbox. The Sun sign of an active subscriber is kept (a sign-up on another device, perhaps
+    with someone else's date of birth, must not change whose forecast they get); it is only filled in when
+    missing, and replaced when a subscriber returns after unsubscribing. A new or returning subscriber is
+    marked as having seen the current Moon sign, so updates start with the next one. A failure is logged
+    without the address and never blocks the visitor.
 
-    Returns (id, kind) with kind "new", "reactivated" or "existing", or None if it could not be saved."""
+    Returns (id, kind, stored sun_sign) with kind "new", "reactivated" or "existing", or None if it could
+    not be saved."""
     engine = get_engine()
     if engine is None:
         app.logger.error("Could not save landing page e-mail: ASTRO_DB_URL is not set")
@@ -913,14 +929,16 @@ def save_landing_email(email, marketing_consent, sun_sign=None):
                     VALUES (:email, :consent, :sun_sign, :key)
                     ON CONFLICT (email) DO UPDATE
                     SET marketing_consent = tbl_landing_emails.marketing_consent OR EXCLUDED.marketing_consent,
-                        sun_sign = COALESCE(EXCLUDED.sun_sign, tbl_landing_emails.sun_sign),
+                        sun_sign = CASE WHEN tbl_landing_emails.updates_active
+                                        THEN COALESCE(tbl_landing_emails.sun_sign, EXCLUDED.sun_sign)
+                                        ELSE COALESCE(EXCLUDED.sun_sign, tbl_landing_emails.sun_sign) END,
                         last_update_key = CASE WHEN tbl_landing_emails.updates_active
                                                THEN COALESCE(tbl_landing_emails.last_update_key,
                                                              EXCLUDED.last_update_key)
                                                ELSE EXCLUDED.last_update_key END,
                         updates_active = true,
                         unsubscribed_at = NULL
-                    RETURNING id, (SELECT updates_active FROM prev) AS prev_active
+                    RETURNING id, sun_sign, (SELECT updates_active FROM prev) AS prev_active
                     """
                 ),
                 {"email": email.lower(), "consent": marketing_consent, "sun_sign": sun_sign,
@@ -930,7 +948,7 @@ def save_landing_email(email, marketing_consent, sun_sign=None):
         app.logger.error("Could not save landing page e-mail: %s", type(exc).__name__)
         return None
     kind = "new" if row.prev_active is None else ("existing" if row.prev_active else "reactivated")
-    return row.id, kind
+    return row.id, kind, row.sun_sign
 
 
 @app.route("/lp/moon/sign", methods=["POST"])
@@ -953,8 +971,68 @@ def landing_moon_subscribe():
     saved = save_landing_email(email, data.get("marketing_consent") is True, sun_sign)
     # Welcome only a new or returning subscriber: submitting the same address again sends nothing
     if saved and saved[1] in ("new", "reactivated"):
-        start_landing_welcome(saved[0], email.lower(), sun_sign)
+        start_landing_welcome(saved[0], email.lower(), saved[2])
+    if saved and saved[1] == "reactivated":
+        log_landing_event(saved[0], email.lower(), "resubscribed", "sign-up")
     return jsonify({"ok": True})
+
+
+VISIT_CODE_RE = re.compile(r"(\d{1,18})\.([0-9a-f]{32})")
+
+
+@app.route("/lp/moon/visit", methods=["POST"])
+def landing_moon_visit():
+    """The personal link from an e-mail (#s=<id>.<token>): returns the subscriber's address, whether
+    updates are on, their Sun sign and the current forecast. Read-only."""
+    data = request.get_json() or {}
+    m = VISIT_CODE_RE.fullmatch(str(data.get("s") or ""))
+    expected = subscriber_token("visit", int(m.group(1))) if m else None
+    if expected is None or not hmac.compare_digest(expected, m.group(2)):
+        return jsonify({"error": "הקישור אינו תקף."}), 404
+    engine = get_engine()
+    if engine is None:
+        return jsonify({"error": "השירות אינו זמין כרגע."}), 503
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT email, sun_sign, updates_active FROM tbl_landing_emails WHERE id = :id"),
+                {"id": int(m.group(1))},
+            ).fetchone()
+    except Exception as exc:
+        app.logger.error("Could not read landing subscriber: %s", type(exc).__name__)
+        return jsonify({"error": "השירות אינו זמין כרגע."}), 503
+    if row is None or row.sun_sign not in ZODIAC_SIGNS:
+        return jsonify({"error": "הקישור אינו תקף."}), 404
+    sign = row.sun_sign
+    return jsonify(
+        {
+            "email": row.email,
+            "subscribed": bool(row.updates_active),
+            "sign": {"sign": sign, "sign_he": ZODIAC_SIGNS_HE[sign], "symbol": ZODIAC_SYMBOLS[sign]},
+            "forecast": landing_forecast_payload(sign, data.get("tz")),
+        }
+    )
+
+
+def log_landing_event(landing_email_id, email, status, note):
+    """One row in tbl_landing_email_log for a subscription change (unsubscribed / resubscribed /
+    admin_edit). Never raises: the change itself has already been saved, the log row is extra."""
+    engine = get_engine()
+    if engine is None:
+        return
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO tbl_landing_email_log (landing_email_id, email, status, note)
+                    VALUES (:lid, :email, :status, :note)
+                    """
+                ),
+                {"lid": landing_email_id, "email": email, "status": status, "note": (note or "")[:1000] or None},
+            )
+    except Exception as exc:
+        app.logger.error("Could not log landing e-mail event %s: %s", status, type(exc).__name__)
 
 
 @app.route("/lp/moon/unsubscribe/<int:landing_email_id>/<token>", methods=["GET", "POST"])
@@ -971,19 +1049,23 @@ def landing_moon_unsubscribe(landing_email_id, token):
         return render_template("landing_unsubscribe.html", state="error"), 503
     try:
         with engine.begin() as conn:
-            conn.execute(
+            row = conn.execute(
                 text(
                     """
                     UPDATE tbl_landing_emails
-                    SET updates_active = false, unsubscribed_at = COALESCE(unsubscribed_at, now())
-                    WHERE id = :id
+                    SET updates_active = false, unsubscribed_at = now()
+                    WHERE id = :id AND updates_active
+                    RETURNING email
                     """
                 ),
                 {"id": landing_email_id},
-            )
+            ).fetchone()
     except Exception as exc:
         app.logger.error("Could not unsubscribe landing e-mail %s: %s", landing_email_id, type(exc).__name__)
         return render_template("landing_unsubscribe.html", state="error"), 500
+    if row is not None:  # only a real change is logged (a second click changes nothing)
+        one_click = request.form.get("List-Unsubscribe") == "One-Click"
+        log_landing_event(landing_email_id, row.email, "unsubscribed", "one-click" if one_click else "link")
     return render_template("landing_unsubscribe.html", state="done")
 
 
@@ -993,11 +1075,16 @@ def landing_moon_forecast():
     dob = parse_landing_dob(data.get("dob"))
     if dob is None:
         return jsonify({"error": "תאריך הלידה אינו תקין."}), 400
-    tz_name = data.get("tz") if data.get("tz") in pytz.all_timezones_set else LANDING_DEFAULT_TZ
+    return jsonify(landing_forecast_payload(sun_sign_on(dob), data.get("tz")))
+
+
+def landing_forecast_payload(sun_sign, tz):
+    """The landing page forecast for a Sun sign right now; times are formatted in tz (IANA name)."""
+    tz_name = tz if tz in pytz.all_timezones_set else LANDING_DEFAULT_TZ
     local_tz = pytz.timezone(tz_name)
 
-    now = moon_transit_for_dob(dob, datetime.now(pytz.utc))
-    period, sun_sign, house, group = now["period"], now["sun_sign"], now["house"], now["group"]
+    now = moon_transit_for_sun_sign(sun_sign, datetime.now(pytz.utc))
+    period, house, group = now["period"], now["house"], now["group"]
 
     try:
         forecast_text = fetch_moon_transit_forecast(house, group)
@@ -1010,21 +1097,19 @@ def landing_moon_forecast():
     def fmt(dt):
         return dt.astimezone(local_tz).strftime("%d/%m %H:%M")
 
-    return jsonify(
-        {
-            "sun_sign": sun_sign,
-            "sun_sign_he": ZODIAC_SIGNS_HE[sun_sign],
-            "moon_sign": period["sign"],
-            "moon_sign_he": ZODIAC_SIGNS_HE[period["sign"]],
-            "moon_sign_symbol": ZODIAC_SYMBOLS[period["sign"]],
-            "moon_start": fmt(period["start"]),
-            "moon_end": fmt(period["end"]),
-            "house_number": house,
-            "forecast_group": group,
-            "forecast_text": forecast_text,
-            "video_url": f"/media/{video}" if video else None,
-        }
-    )
+    return {
+        "sun_sign": sun_sign,
+        "sun_sign_he": ZODIAC_SIGNS_HE[sun_sign],
+        "moon_sign": period["sign"],
+        "moon_sign_he": ZODIAC_SIGNS_HE[period["sign"]],
+        "moon_sign_symbol": ZODIAC_SYMBOLS[period["sign"]],
+        "moon_start": fmt(period["start"]),
+        "moon_end": fmt(period["end"]),
+        "house_number": house,
+        "forecast_group": group,
+        "forecast_text": forecast_text,
+        "video_url": f"/media/{video}" if video else None,
+    }
 
 
 @app.route("/signs")
@@ -1275,6 +1360,186 @@ def admin_send_now(rid):
         return admin_redirect("Recipient not found")
     status = send_emails.deliver(engine, rows[0], "manual", None, send_emails.env_dry_run())
     return admin_redirect(f"Send now: {status}")
+
+
+# ── Admin: landing page subscribers and their e-mail log ─────────────────────
+SUBSCRIBER_FIELDS = ("email", "sun_sign", "marketing_consent", "updates_active", "last_update_key")
+# Makes a subscriber due at the cron job's next run (any key that is not the current period works)
+DUE_NOW_KEY = "2000-01-01T00:00Z"
+
+
+def subscribers_redirect(msg, q=None):
+    return redirect(url_for("admin_subscribers", msg=msg, q=q or None))
+
+
+def fetch_subscriber(conn, sid):
+    return conn.execute(text("SELECT * FROM tbl_landing_emails WHERE id = :id"), {"id": sid}).fetchone()
+
+
+@app.route("/admin/subscribers")
+def admin_subscribers():
+    engine = get_engine()
+    if engine is None:
+        return "ASTRO_DB_URL environment variable is not set.", 500
+    q = request.args.get("q", "").strip()
+    like = f"%{q.lower()}%"
+    with engine.connect() as conn:
+        subscribers = conn.execute(
+            text(
+                """
+                SELECT e.*, s.sends, s.last_sent
+                FROM tbl_landing_emails e
+                LEFT JOIN LATERAL (
+                    SELECT count(*) FILTER (WHERE l.status = 'sent') AS sends,
+                           max(l.sent_at) FILTER (WHERE l.status = 'sent') AS last_sent
+                    FROM tbl_landing_email_log l WHERE l.landing_email_id = e.id
+                ) s ON true
+                WHERE :q = '' OR e.email LIKE :like
+                ORDER BY e.id DESC
+                """
+            ),
+            {"q": q, "like": like},
+        ).fetchall()
+        logs = conn.execute(
+            text(
+                """
+                SELECT * FROM tbl_landing_email_log
+                WHERE :q = '' OR email LIKE :like
+                ORDER BY sent_at DESC, id DESC LIMIT :n
+                """
+            ),
+            {"q": q, "like": like, "n": ADMIN_LOG_LIMIT},
+        ).fetchall()
+    import send_emails  # imported here: send_emails imports this module
+    try:
+        current_key = moon_update_key(moon_period_at(datetime.now(pytz.utc)))
+    except Exception:
+        current_key = None
+    return render_template(
+        "admin_subscribers.html",
+        subscribers=subscribers,
+        logs=logs,
+        q=q,
+        msg=request.args.get("msg"),
+        log_limit=ADMIN_LOG_LIMIT,
+        signs=ZODIAC_SIGNS,
+        symbols=ZODIAC_SYMBOLS,
+        current_key=current_key,
+        due_now_key=DUE_NOW_KEY,
+        modes={
+            "LANDING_UPDATES": send_emails.updates_mode(),
+            "LANDING_WELCOME": landing_welcome_mode(),
+            "EMAIL_DRY_RUN": "on" if send_emails.env_dry_run() else "off",
+            "UNSUBSCRIBE_SECRET": "set" if unsubscribe_token(0) else "NOT SET",
+        },
+    )
+
+
+@app.route("/admin/subscribers/<int:sid>/save", methods=["POST"])
+def admin_save_subscriber(sid):
+    """Save the edit form. Turning updates off/on is logged as unsubscribed/resubscribed (note "admin"),
+    any other change as admin_edit with what changed."""
+    f = request.form
+    q = f.get("q", "")
+    email = f.get("email", "").strip().lower()
+    if len(email) > 254 or not EMAIL_RE.match(email):
+        return subscribers_redirect("Invalid e-mail", q)
+    sun_sign = f.get("sun_sign") or None
+    if sun_sign is not None and sun_sign not in ZODIAC_SIGNS:
+        return subscribers_redirect("Invalid Sun sign", q)
+    key = f.get("last_update_key", "").strip() or None
+    if key is not None:
+        try:
+            datetime.strptime(key, UPDATE_KEY_FMT)
+        except ValueError:
+            return subscribers_redirect("Last update key must look like 2026-11-17T21:19Z (or be empty)", q)
+    new = {
+        "email": email, "sun_sign": sun_sign, "marketing_consent": f.get("marketing_consent") == "on",
+        "updates_active": f.get("updates_active") == "on", "last_update_key": key,
+    }
+    engine = get_engine()
+    try:
+        with engine.begin() as conn:
+            old = fetch_subscriber(conn, sid)
+            if old is None:
+                return subscribers_redirect("Subscriber not found", q)
+            conn.execute(
+                text(
+                    """
+                    UPDATE tbl_landing_emails
+                    SET email = :email, sun_sign = :sun_sign, marketing_consent = :marketing_consent,
+                        last_update_key = :last_update_key, updates_active = :updates_active,
+                        unsubscribed_at = CASE WHEN :updates_active THEN NULL
+                                               WHEN updates_active THEN now() ELSE unsubscribed_at END
+                    WHERE id = :id
+                    """
+                ),
+                dict(new, id=sid),
+            )
+    except Exception as exc:
+        if "unique" in str(exc).lower():
+            return subscribers_redirect("This e-mail already exists", q)
+        app.logger.error("Could not save subscriber: %s", type(exc).__name__)
+        return subscribers_redirect("Could not save the subscriber", q)
+
+    changes = [f"{k}: {getattr(old, k)} -> {new[k]}" for k in SUBSCRIBER_FIELDS
+               if k != "updates_active" and getattr(old, k) != new[k]]
+    if old.updates_active != new["updates_active"]:
+        log_landing_event(sid, email, "resubscribed" if new["updates_active"] else "unsubscribed",
+                          "; ".join(["admin"] + changes))
+    elif changes:
+        log_landing_event(sid, email, "admin_edit", "admin; " + "; ".join(changes))
+    else:
+        return subscribers_redirect(f"No changes for #{sid}", q)
+    return subscribers_redirect(f"Subscriber #{sid} updated", q)
+
+
+@app.route("/admin/subscribers/<int:sid>/due", methods=["POST"])
+def admin_make_subscriber_due(sid):
+    """For testing: the cron job sends this subscriber the current update at its next run (08:00-21:00)."""
+    q = request.form.get("q", "")
+    with get_engine().begin() as conn:
+        row = conn.execute(
+            text("UPDATE tbl_landing_emails SET last_update_key = :k WHERE id = :id RETURNING email, last_update_key"),
+            {"k": DUE_NOW_KEY, "id": sid},
+        ).fetchone()
+    if row is None:
+        return subscribers_redirect("Subscriber not found", q)
+    log_landing_event(sid, row.email, "admin_edit", f"admin; made due (last_update_key -> {DUE_NOW_KEY})")
+    return subscribers_redirect(f"#{sid} will get the current update at the next cron run "
+                                "(if LANDING_UPDATES is dry_run/on, 08:00-21:00 Israel time)", q)
+
+
+@app.route("/admin/subscribers/<int:sid>/send", methods=["POST"])
+def admin_send_subscriber(sid):
+    """Send the current update e-mail to one subscriber right away (EMAIL_DRY_RUN respected).
+    Does not change last_update_key, so the regular updates are not affected."""
+    import send_emails  # imported here: send_emails imports this module
+    q = request.form.get("q", "")
+    engine = get_engine()
+    with engine.connect() as conn:
+        row = fetch_subscriber(conn, sid)
+    if row is None:
+        return subscribers_redirect("Subscriber not found", q)
+    if not row.sun_sign:
+        return subscribers_redirect(f"#{sid} has no Sun sign; set one first", q)
+    now_utc = datetime.now(pytz.utc)
+    status = send_emails.deliver_update(
+        engine, send_emails.Subscriber(row.id, row.email, row.sun_sign),
+        moon_update_key(moon_period_at(now_utc)), send_emails.env_dry_run(), now_utc,
+    )
+    return subscribers_redirect(f"Send now to #{sid}: {status}", q)
+
+
+@app.route("/admin/subscribers/<int:sid>/delete", methods=["POST"])
+def admin_delete_subscriber(sid):
+    q = request.form.get("q", "")
+    with get_engine().begin() as conn:
+        row = conn.execute(text("DELETE FROM tbl_landing_emails WHERE id = :id RETURNING email"), {"id": sid}).fetchone()
+    if row is None:
+        return subscribers_redirect("Subscriber not found", q)
+    log_landing_event(None, row.email, "admin_edit", f"admin; deleted subscriber #{sid}")
+    return subscribers_redirect(f"Subscriber #{sid} deleted (its log rows are kept)", q)
 
 
 if __name__ == "__main__":

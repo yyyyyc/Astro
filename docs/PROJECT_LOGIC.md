@@ -30,6 +30,7 @@ It answers four questions, plus a Hebrew landing page for ad campaigns:
 | Secondary Progression | Secondary Progression page | Where is my secondary-progressed (day-for-a-year) Moon on a given date? | ✅ |
 | Moon of Transit | Moon of Transit page | Which sign is the real Moon in right now, when does it move on, and what does that mean for me? | ✅ |
 | Moon of Transit (landing) | `/lp/moon` | Same as Moon of Transit, as a short guided funnel in Hebrew for visitors from ads (e.g. Facebook) | ✅ |
+| Landing subscribers admin | `/admin/subscribers` | View and edit landing page subscribers and their e-mail log | ✅ |
 | Scheduled e-mails (test) | Render Cron Job + `/admin/recipients` | Sends the current Moon of Transit forecast by e-mail to test recipients on the days and times they chose | ✅ |
 | Forecast update e-mails | Render Cron Job + `/lp/moon/unsubscribe/…` | Sends landing page subscribers their own forecast once per Moon sign, and a welcome e-mail right after sign-up; off until `LANDING_UPDATES` / `LANDING_WELCOME` are set | ✅ |
 
@@ -108,6 +109,19 @@ also links to it with the **✦ Landing Page** button.
    straight away. A note under the date form says the date is kept only in the browser. **שכחו אותי במכשיר
    הזה** (Forget me on this device), shown when something is saved, clears it. Nothing about this is sent to
    the server. If the browser blocks storage, the page simply does not remember.
+9. **Another device** ✅: a device that does not remember the visitor shows the sign-up form as usual.
+   Entering an address that is already subscribed shows the same confirmation, adds no second row, sends no
+   second welcome e-mail and does **not** change the stored Sun sign (see 7). The page never says "already
+   registered", so nobody can find out whether an address is on the list.
+10. **Personal link from an e-mail** ✅: the "לתחזית באתר" link in every update and welcome e-mail is
+   `/lp/moon#s=<id>.<code>`, the code being an HMAC of the row id with `UNSUBSCRIBE_SECRET` (signed for this
+   purpose only, so it cannot unsubscribe and an unsubscribe code cannot open it). The code is in the `#`
+   part, which browsers never send to the server; a script at the top of the page removes it from the address
+   before Google Analytics and the Meta Pixel load. The page sends it to `POST /lp/moon/visit` (read-only),
+   which returns the address, whether updates are on, the stored Sun sign and the current forecast. The page
+   then skips the intro, spins the wheel to the Sun sign, shows the forecast and video, and, if subscribed,
+   shows "נעדכן אתכם במייל ‹address›…" and remembers the address on this device; if the subscriber had
+   unsubscribed, the form is shown filled with the address. A wrong or expired link: the page starts as usual.
 
 ### 2.5 Test e-mail recipients admin (`/admin/recipients`) ✅
 
@@ -129,6 +143,28 @@ login prompt). The page asks search engines not to index it.
 3. **Delete** removes a recipient; their log rows are kept.
 4. The **send log** shows the latest 200 attempts with status, Moon sign, house, group, subject, provider
    message ID and error.
+
+### 2.6 Landing page subscribers admin (`/admin/subscribers`) ✅
+
+An English page for the site owner, with the same login and protections as 2.5 (both pages link to each
+other). It shows `tbl_landing_emails` and `tbl_landing_email_log` (5.8).
+
+1. **Status bar:** the current values of `LANDING_UPDATES`, `LANDING_WELCOME`, `EMAIL_DRY_RUN`, whether
+   `UNSUBSCRIBE_SECRET` is set, and the current Moon period key.
+2. **Filter** by part of the e-mail; it filters both tables.
+3. **Subscribers table:** id, e-mail, Sun sign, updates on/off, consent, unsubscribed at, last update key
+   (tagged "current" when it is the current period), number of successful sends, last send, created.
+4. **Edit:** e-mail, Sun sign (or none, which stops e-mails), last update key (`YYYY-MM-DDTHH:MMZ` or empty,
+   with shortcuts for the current period / due now / empty), updates active and marketing consent. Turning
+   updates off sets `unsubscribed_at`; turning them on clears it. Turning updates off/on is logged as
+   `unsubscribed`/`resubscribed` with note `admin`, other changes as `admin_edit` with what changed.
+5. **Make due:** sets `last_update_key` to an old value, so the cron job sends the current update at its next
+   run (if `LANDING_UPDATES` is `dry_run`/`on`, 08:00–21:00 Israel time). Logged as `admin_edit`.
+6. **Send now:** sends the current update e-mail right away (a dry run when `EMAIL_DRY_RUN=1`), without
+   changing `last_update_key`.
+7. **Delete:** removes the subscriber; their log rows are kept, and an `admin_edit` row records the deletion.
+8. **E-mail log:** the latest 200 rows: time, subscriber, status, note, period key, Moon and Sun sign, house,
+   group, subject, message ID, error.
 
 ## 3. Required user inputs
 
@@ -262,6 +298,9 @@ to a feature that is still planned.
    `tbl_landing_emails` (section 7). The page sends the date of birth with the sign-up; the server uses it
    only to work out the Sun sign and does not store it. If saving fails, the visitor still sees the confirmation message and the failure is logged
    without the address.
+6. **Personal link step** (`POST /lp/moon/visit`), only when the page was opened from an e-mail link
+   (2.4 item 10): checks the signed code and returns the subscriber's address, `updates_active`, Sun sign and
+   the same forecast data as step 4, worked out from the stored Sun sign. Read-only; a wrong code gives 404.
 
 **Design system** (`static/landing/ds.css`, `static/landing/ds.js`): every landing field uses the same
 classes (`ds-field`, `ds-input`, `ds-btn`…) and the same validation rules, declared on the field
@@ -322,9 +361,14 @@ The same cron run (`send_emails.py`) then runs a second, independent job, switch
    so a Moon sign is never sent twice.
 5. **Content (Hebrew):** subject "הירח עבר למזל ‹Moon› – התחזית שלכם, בני מזל ‹Sun›"; which house that is for
    the subscriber and until when (Israel time); the forecast text for house + group at the moment of sending
-   (5.5 rules); a link to `/lp/moon`; and an unsubscribe link. Sent through Brevo like 5.7, with the
+   (5.5 rules); the personal link to `/lp/moon` (2.4 item 10); and an unsubscribe link. Sent through Brevo like 5.7, with the
    `List-Unsubscribe` and `List-Unsubscribe-Post` (one-click) headers.
-6. **Log:** one row per attempt in `tbl_landing_email_log`.
+6. **Log:** one row per attempt in `tbl_landing_email_log`. Subscription changes are logged there too
+   (`update_key` empty): `unsubscribed` (note `link` for the confirm button, `one-click` for a mail client's
+   unsubscribe, `admin`), `resubscribed` (note `sign-up` when an unsubscribed address signs up again on the
+   page, or `admin`) and `admin_edit` (2.6). Only a real change is logged; a second unsubscribe click adds
+   nothing. A failure to write the log row never undoes or blocks the change. These statuses need
+   `docs/sql/2026-11-19_landing_log_events.sql`.
 7. **Unsubscribe** (`/lp/moon/unsubscribe/<id>/<token>`): the token is an HMAC of the row id with
    `UNSUBSCRIBE_SECRET`, so a link cannot be guessed or changed to another person. Opening the link shows a
    confirm button (mail scanners open links, so opening alone changes nothing); confirming, or a mail client's
@@ -338,7 +382,7 @@ The same cron run (`send_emails.py`) then runs a second, independent job, switch
    **new** address or one **returning after unsubscribing**; submitting an active address again sends
    nothing. Sent at any hour (it answers the visitor's own action), only when the Sun sign is known. Content:
    subject "נרשמתם לעדכוני תחזית הירח – התחזית שלכם עכשיו, בני מזל ‹Sun›"; a thank-you and how often updates
-   come; the current Moon sign, house and until when; the current forecast text; a link to `/lp/moon`; and the
+   come; the current Moon sign, house and until when; the current forecast text; the personal link to `/lp/moon`; and the
    unsubscribe link and headers (needs `UNSUBSCRIBE_SECRET` and `BREVO_API_KEY`/`EMAIL_FROM` on the web
    service). Logged in `tbl_landing_email_log` like an update, with the current period as `update_key`; a
    welcome row is recognised by its subject.
@@ -375,7 +419,9 @@ Rules:
   the visitor's own browser; see 2.4).
 - **Landing page e-mails** ✅. Each valid address is saved once, in lower
   case, with the time it was first entered, in `tbl_landing_emails`, together with the visitor's **Sun sign**
-  (`sun_sign`, for the personal update e-mails in 5.8; a later sign-up replaces it; NULL for rows saved before
+  (`sun_sign`, for the personal update e-mails in 5.8; while the subscriber is active a later sign-up does not
+  change it, so a sign-up on another device with someone else's date of birth cannot switch their forecast; it
+  is filled in if missing and replaced when they sign up again after unsubscribing; NULL for rows saved before
   this column was added). `marketing_consent` is true only after
   the visitor ticks the checkbox, and a later submission without the tick does not clear it. Addresses saved
   before the checkbox existed stay false. Forecast updates (5.8) go to every active subscriber with a known
@@ -388,8 +434,9 @@ Rules:
   for every attempt.
 - **Update e-mails** ✅: the cron job (5.8) updates `last_update_key` in `tbl_landing_emails` and inserts a row
   into `tbl_landing_email_log` for every attempt; sign-up sets `last_update_key` and the welcome e-mail adds a
-  log row too; the unsubscribe page updates `updates_active` and `unsubscribed_at`. These are the only other
-  tables the site writes.
+  log row too; the unsubscribe page updates `updates_active` and `unsubscribed_at` and logs the change; the
+  subscribers admin (2.6) edits and deletes rows of `tbl_landing_emails` and logs each change. These are the
+  only other tables the site writes.
 - **Meta Pixel** ✅: when `META_PIXEL_ID` is set, `/lp/moon` loads the Pixel and sends `PageView` on load and
   `Lead` once per visit after a valid e-mail sign-up. Automatic configuration is off, and the e-mail, date of birth and
   forecast are not sent. No other page has the Pixel.
@@ -489,6 +536,7 @@ audio files are not used.
 | Secondary Progression ‏(פרוגרסיה סקנדרית) | עמוד הפרוגרסיה הסקנדרית | היכן נמצא הירח המתקדם שלי בשיטת יום-לשנה בתאריך מסוים? | ✅ |
 | Moon of Transit ‏(ירח בטרנזיט) | עמוד הירח בטרנזיט | באיזה מזל נמצא הירח האמיתי עכשיו, מתי יעבור הלאה, ומה המשמעות עבורי? | ✅ |
 | ירח בטרנזיט (עמוד נחיתה) | `/lp/moon` | כמו ירח בטרנזיט, כתהליך קצר ומודרך בעברית למבקרים שמגיעים ממודעות (למשל פייסבוק) | ✅ |
+| ניהול הנרשמים בעמוד הנחיתה | `/admin/subscribers` | צפייה ועריכה של הנרשמים בעמוד הנחיתה ושל יומן המיילים שלהם | ✅ |
 | מיילים מתוזמנים (בדיקה) | Render Cron Job + ‏`/admin/recipients` | שולח במייל את תחזית הירח בטרנזיט הנוכחית לנמעני בדיקה בימים ובשעות שבחרו | ✅ |
 | מיילי עדכון תחזית | Render Cron Job + ‏`/lp/moon/unsubscribe/…` | שולח לנרשמים בעמוד הנחיתה את התחזית האישית שלהם פעם אחת בכל מזל של הירח, ומייל ברוכים הבאים מיד אחרי ההרשמה; כבוי עד שמגדירים `LANDING_UPDATES` / ‏`LANDING_WELCOME` | ✅ |
 
@@ -558,6 +606,16 @@ audio files are not used.
    "נעדכן אתכם במייל ‹כתובת› כשהתחזית משתנה". הערה מתחת לטופס התאריך מציינת שהתאריך נשמר בדפדפן בלבד.
    **שכחו אותי במכשיר הזה**, שמוצג כשיש משהו שמור, מוחק אותו. דבר מזה אינו נשלח לשרת. אם הדפדפן חוסם אחסון,
    העמוד פשוט לא זוכר.
+9. **מכשיר אחר** ✅: מכשיר שאינו זוכר את המבקר מציג את טופס ההרשמה כרגיל. הזנת כתובת שכבר רשומה מציגה את אותו
+   אישור, אינה מוסיפה שורה שנייה, אינה שולחת מייל ברוכים הבאים נוסף ו**אינה** משנה את מזל השמש השמור (ראו 7).
+   העמוד לעולם אינו אומר "כבר רשומים", כך שאיש אינו יכול לגלות אם כתובת נמצאת ברשימה.
+10. **קישור אישי מהמייל** ✅: הקישור "לתחזית באתר" בכל מייל עדכון וברוכים הבאים הוא `/lp/moon#s=<id>.<code>`,
+   כשהקוד הוא HMAC של מזהה השורה עם `UNSUBSCRIBE_SECRET` (חתום למטרה זו בלבד, כך שאי אפשר להסיר בעזרתו, וקוד
+   הסרה אינו פותח אותו). הקוד נמצא בחלק שאחרי `#`, שדפדפנים לעולם אינם שולחים לשרת; סקריפט בראש העמוד מסיר אותו
+   מהכתובת לפני ש-Google Analytics והפיקסל של Meta נטענים. העמוד שולח אותו ל-`POST /lp/moon/visit` (קריאה בלבד),
+   שמחזיר את הכתובת, האם העדכונים פעילים, מזל השמש השמור והתחזית הנוכחית. אז העמוד מדלג על הפתיח, מסובב את
+   הגלגל למזל השמש, מציג את התחזית והסרטון, ואם המבקר רשום – מציג "נעדכן אתכם במייל ‹כתובת›…" וזוכר את הכתובת
+   במכשיר הזה; אם הוא הסיר את עצמו, הטופס מוצג עם הכתובת ממולאת. קישור שגוי: העמוד מתחיל כרגיל.
 
 ### 2.5 ניהול נמעני מיילים לבדיקה (`/admin/recipients`) ✅
 
@@ -577,6 +635,27 @@ audio files are not used.
 3. **Delete** מוחק נמען; שורות היומן שלו נשמרות.
 4. **יומן השליחות** מציג את 200 הניסיונות האחרונים עם סטטוס, מזל הירח, בית, קבוצה, נושא, מזהה ההודעה אצל
    ספק המייל ושגיאה.
+
+### 2.6 ניהול הנרשמים בעמוד הנחיתה (`/admin/subscribers`) ✅
+
+עמוד באנגלית לבעל האתר, עם אותה התחברות ואותן הגנות כמו ב-2.5 (שני העמודים מקשרים זה לזה). הוא מציג את
+`tbl_landing_emails` ואת `tbl_landing_email_log` (5.8).
+
+1. **שורת מצב:** הערכים הנוכחיים של `LANDING_UPDATES`, ‏`LANDING_WELCOME`, ‏`EMAIL_DRY_RUN`, האם `UNSUBSCRIBE_SECRET`
+   מוגדר, ומפתח תקופת הירח הנוכחית.
+2. **סינון** לפי חלק מהמייל; מסנן את שתי הטבלאות.
+3. **טבלת הנרשמים:** מזהה, מייל, מזל שמש, עדכונים פעילים או לא, הסכמה, מועד ההסרה, מפתח העדכון האחרון (מסומן
+   "current" כשהוא התקופה הנוכחית), מספר השליחות המוצלחות, השליחה האחרונה, מועד היצירה.
+4. **עריכה:** מייל, מזל שמש (או ללא, מה שעוצר את המיילים), מפתח העדכון האחרון (`YYYY-MM-DDTHH:MMZ` או ריק, עם
+   קיצורים לתקופה הנוכחית / due now / ריק), עדכונים פעילים והסכמה לדיוור. כיבוי העדכונים ממלא את `unsubscribed_at`;
+   הדלקתם מנקה אותו. כיבוי/הדלקה של העדכונים נרשמים ביומן כ-`unsubscribed`/`resubscribed` עם ההערה `admin`, ושינויים
+   אחרים כ-`admin_edit` עם מה שהשתנה.
+5. **Make due:** מגדיר את `last_update_key` לערך ישן, כך שמשימת ה-Cron שולחת את העדכון הנוכחי בריצה הבאה (אם
+   `LANDING_UPDATES` הוא `dry_run`/`on`, בין 08:00 ל-21:00 שעון ישראל). נרשם כ-`admin_edit`.
+6. **Send now:** שולח מיד את מייל העדכון הנוכחי (הרצה יבשה כאשר `EMAIL_DRY_RUN=1`), בלי לשנות את `last_update_key`.
+7. **Delete:** מוחק את הנרשם; שורות היומן שלו נשמרות, ושורת `admin_edit` מתעדת את המחיקה.
+8. **יומן המיילים:** 200 השורות האחרונות: זמן, נרשם, סטטוס, הערה, מפתח תקופה, מזל הירח והשמש, בית, קבוצה, נושא,
+   מזהה הודעה, שגיאה.
 
 ## 3. קלט נדרש מהמשתמש
 
@@ -704,6 +783,9 @@ audio files are not used.
    והמייל, בחירת ההסכמה ו**מזל השמש** נשמרים בטבלה `tbl_landing_emails` (סעיף 7). העמוד שולח את תאריך הלידה
    עם ההרשמה; השרת משתמש בו רק כדי לחשב את מזל השמש ואינו שומר אותו. אם השמירה נכשלת, המבקר עדיין רואה את
    הודעת האישור, והכשל נרשם ביומן ללא הכתובת.
+6. **שלב הקישור האישי** (`POST /lp/moon/visit`), רק כשהעמוד נפתח מקישור במייל (2.4 סעיף 10): בודק את הקוד
+   החתום ומחזיר את כתובת הנרשם, `updates_active`, מזל השמש ואותם נתוני תחזית כמו בשלב 4, מחושבים ממזל השמש השמור.
+   קריאה בלבד; קוד שגוי מחזיר 404.
 
 **מערכת עיצוב** (`static/landing/ds.css`, `static/landing/ds.js`): כל שדות עמוד הנחיתה משתמשים באותן
 מחלקות (`ds-field`, `ds-input`, `ds-btn`…) ובאותם כללי בדיקה, שמוגדרים על השדה עצמו
@@ -760,9 +842,13 @@ audio files are not used.
 4. **תפיסה לפני שליחה:** ‏`last_update_key` עובר לתקופה החדשה רק אם אף ריצה אחרת לא העבירה אותו קודם, כך
    שמזל של הירח לעולם אינו נשלח פעמיים.
 5. **תוכן (בעברית):** נושא "הירח עבר למזל ‹ירח› – התחזית שלכם, בני מזל ‹שמש›"; איזה בית זה עבור הנרשם ועד מתי
-   (שעון ישראל); טקסט התחזית לפי בית + קבוצה ברגע השליחה (כללי 5.5); קישור ל-`/lp/moon`; וקישור הסרה. נשלח
+   (שעון ישראל); טקסט התחזית לפי בית + קבוצה ברגע השליחה (כללי 5.5); הקישור האישי ל-`/lp/moon` (2.4 סעיף 10); וקישור הסרה. נשלח
    דרך Brevo כמו ב-5.7, עם הכותרות `List-Unsubscribe` ו-`List-Unsubscribe-Post` (הסרה בלחיצה אחת).
-6. **יומן:** שורה אחת לכל ניסיון בטבלה `tbl_landing_email_log`.
+6. **יומן:** שורה אחת לכל ניסיון בטבלה `tbl_landing_email_log`. גם שינויים במינוי נרשמים שם (`update_key` ריק):
+   `unsubscribed` (הערה `link` לכפתור האישור, `one-click` להסרה מתוכנת הדואר, `admin`), ‏`resubscribed` (הערה
+   `sign-up` כשכתובת שהוסרה נרשמת שוב בעמוד, או `admin`) ו-`admin_edit` ‏(2.6). רק שינוי אמיתי נרשם; לחיצה שנייה על
+   ההסרה לא מוסיפה דבר. כשל ברישום שורת היומן לעולם אינו מבטל או חוסם את השינוי. הסטטוסים האלה דורשים את
+   `docs/sql/2026-11-19_landing_log_events.sql`.
 7. **הסרה** (`/lp/moon/unsubscribe/<id>/<token>`): הטוקן הוא HMAC של מזהה השורה עם `UNSUBSCRIBE_SECRET`, כך
    שאי אפשר לנחש קישור או לשנות אותו לאדם אחר. פתיחת הקישור מציגה כפתור אישור (סורקי דואר פותחים קישורים, ולכן
    פתיחה לבדה לא משנה דבר); האישור, או הסרה בלחיצה אחת מתוכנת הדואר, מגדירים את `updates_active` כשקר וממלאים
@@ -774,7 +860,7 @@ audio files are not used.
    או `on`; גם `EMAIL_DRY_RUN=1` הופך אותו להרצה יבשה. נשלח רק לכתובת **חדשה** או לכתובת **שחוזרת אחרי הסרה**;
    שליחה חוזרת של כתובת פעילה אינה שולחת דבר. נשלח בכל שעה (זו תגובה לפעולה של המבקר עצמו), ורק כשמזל השמש ידוע.
    תוכן: נושא "נרשמתם לעדכוני תחזית הירח – התחזית שלכם עכשיו, בני מזל ‹שמש›"; תודה וכל כמה זמן מגיעים העדכונים;
-   מזל הירח הנוכחי, הבית ועד מתי; טקסט התחזית הנוכחי; קישור ל-`/lp/moon`; וקישור וכותרות ההסרה (נדרשים
+   מזל הירח הנוכחי, הבית ועד מתי; טקסט התחזית הנוכחי; הקישור האישי ל-`/lp/moon`; וקישור וכותרות ההסרה (נדרשים
    `UNSUBSCRIBE_SECRET` ו-`BREVO_API_KEY`/`EMAIL_FROM` בשירות האתר). נרשם ב-`tbl_landing_email_log` כמו עדכון,
    עם התקופה הנוכחית כ-`update_key`; שורת ברוכים הבאים מזוהה לפי הנושא.
 
@@ -809,7 +895,9 @@ audio files are not used.
   של המשתמשים. תאריך הלידה אינו נשמר בשרת (עמוד הנחיתה שומר אותו רק בדפדפן של המבקר; ראו 2.4).
 - **כתובות המייל מעמוד הנחיתה** ✅. כל כתובת תקינה נשמרת פעם אחת, באותיות
   קטנות, עם מועד ההזנה הראשון, בטבלה `tbl_landing_emails`, יחד עם **מזל השמש** של המבקר (`sun_sign`, לצורך
-  מיילי העדכון האישיים שבסעיף 5.8; הרשמה מאוחרת יותר מחליפה אותו; NULL בשורות שנשמרו לפני שהעמודה נוספה). הערך `marketing_consent` הופך לאמת רק אחרי שהמבקר
+  מיילי העדכון האישיים שבסעיף 5.8; כל עוד הנרשם פעיל, הרשמה מאוחרת יותר אינה משנה אותו, כך שהרשמה במכשיר אחר
+  עם תאריך לידה של מישהו אחר אינה יכולה להחליף את התחזית שלו; הוא מתמלא אם חסר ומוחלף כשהנרשם נרשם מחדש אחרי
+  הסרה; NULL בשורות שנשמרו לפני שהעמודה נוספה). הערך `marketing_consent` הופך לאמת רק אחרי שהמבקר
   מסמן את התיבה, ושליחה מאוחרת יותר ללא סימון אינה מבטלת אותו. כתובות שנשמרו לפני שנוספה התיבה נשארות עם הערך
   שקר. עדכוני תחזית (5.8) נשלחים לכל נרשם פעיל שמזל השמש שלו ידוע; דיוור (הצעות) מותר רק כאשר `marketing_consent`
   הוא אמת. ההסרה מהעדכונים אוטומטית דרך הקישור שבכל עדכון ✅ (`updates_active`, ‏`unsubscribed_at`); אין ביטול
@@ -819,7 +907,8 @@ audio files are not used.
   משימת ה-Cron ‏(5.7) מעדכנת את `last_run` ומוסיפה שורה ל-`tbl_test_email_log` בכל ניסיון.
 - **מיילי עדכון** ✅: משימת ה-Cron ‏(5.8) מעדכנת את `last_update_key` ב-`tbl_landing_emails` ומוסיפה שורה
   ל-`tbl_landing_email_log` בכל ניסיון; ההרשמה מגדירה את `last_update_key` ומייל ברוכים הבאים מוסיף גם הוא שורה
-  ליומן; עמוד ההסרה מעדכן את `updates_active` ו-`unsubscribed_at`. אלה הטבלאות היחידות הנוספות שהאתר כותב אליהן.
+  ליומן; עמוד ההסרה מעדכן את `updates_active` ו-`unsubscribed_at` ורושם את השינוי ביומן; עמוד ניהול הנרשמים (2.6)
+  עורך ומוחק שורות ב-`tbl_landing_emails` ורושם כל שינוי. אלה הטבלאות היחידות הנוספות שהאתר כותב אליהן.
 - **הפיקסל של Meta** ✅: כאשר `META_PIXEL_ID` מוגדר, העמוד `/lp/moon` טוען את הפיקסל ושולח `PageView` בטעינה
   ו-`Lead` פעם אחת בכל ביקור אחרי הרשמה עם מייל תקין. התצורה האוטומטית כבויה, והמייל, תאריך הלידה והתחזית אינם נשלחים.
   בשאר העמודים אין פיקסל.

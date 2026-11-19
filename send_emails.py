@@ -332,7 +332,7 @@ def build_update_email(subscriber, now_utc, texts=None):
     unsub = astro.unsubscribe_url(subscriber.id)
     if unsub is None:
         raise RuntimeError("UNSUBSCRIBE_SECRET is not set")
-    site = astro.site_url() + "/lp/moon"
+    site = astro.visit_url(subscriber.id)  # opens the page with this subscriber's forecast on any device
 
     values = {
         "moon": signs[period["sign"]],

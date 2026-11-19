@@ -81,6 +81,7 @@
   </style>
 </head>
 <body>
+  <nav style="margin-bottom:1rem;font-size:0.9rem"><a href="{{ url_for('admin_subscribers') }}" style="margin-right:1rem">Landing subscribers</a><a href="{{ url_for('admin_recipients') }}" style="margin-right:1rem">Test recipients</a><a href="/lp/moon">Landing page</a></nav>
   <h1>&#9790; Test e-mail recipients</h1>
 
   {% if msg %}<div class="msg">{{ msg }}</div>{% endif %}

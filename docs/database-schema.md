@@ -54,7 +54,9 @@ public.tbl_landing_emails
   created_at timestamptz NOT NULL DEFAULT now()
   marketing_consent boolean NOT NULL DEFAULT false  -- True once the visitor ticks the consent checkbox; send marketing only to these
   sun_sign   text        NULL CHECK (sun_sign IN ('Aries', ..., 'Pisces'))  -- English name, from the date of birth at sign-up
-                                                  -- (the date itself is not stored); NULL for rows saved before it existed.
+                                                  -- (the date itself is not stored); kept while updates_active (a repeat
+                                                  -- sign-up only fills it if NULL), replaced on sign-up after unsubscribing;
+                                                  -- NULL for rows saved before it existed.
                                                   -- Added by docs/sql/2026-11-18_landing_emails_sun_sign.sql
   updates_active  boolean     NOT NULL DEFAULT true  -- false after unsubscribing from forecast updates; a new sign-up sets it back
   unsubscribed_at timestamptz NULL                   -- last unsubscribe from updates; cleared by a new sign-up
@@ -63,14 +65,20 @@ public.tbl_landing_emails
                                                      -- docs/sql/2026-11-18_landing_updates.sql
 
 public.tbl_landing_email_log
-  -- One row per forecast update or welcome e-mail attempt to a landing page subscriber (send_emails.py, 5.8).
+  -- One row per forecast update or welcome e-mail attempt to a landing page subscriber (send_emails.py, 5.8),
+  -- and one per subscription change (unsubscribe link, sign-up again, /admin/subscribers).
   -- Welcome rows: update_key = the period at sign-up; recognised by their subject.
   id                  bigint      NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY
   landing_email_id    bigint      NULL REFERENCES tbl_landing_emails(id) ON DELETE SET NULL
   email               text        NOT NULL                        -- copied, so the log survives a deleted subscriber
-  update_key          text        NOT NULL                        -- Moon sign period start (UTC)
-  sent_at             timestamptz NOT NULL DEFAULT now()          -- indexed (DESC)
-  status              text        NOT NULL CHECK (status IN ('sent', 'failed', 'dry_run'))
+  update_key          text        NULL                            -- Moon sign period start (UTC); NULL for subscription changes
+  sent_at             timestamptz NOT NULL DEFAULT now()          -- indexed (DESC); the time of the event
+  status              text        NOT NULL CHECK (status IN ('sent', 'failed', 'dry_run',
+                                                             'unsubscribed', 'resubscribed', 'admin_edit'))
+  note                text        NULL                            -- subscription changes: link | one-click | sign-up | admin
+                                                                  -- (+ what the admin changed); NULL for e-mails
+                                                                  -- update_key NULL, the 3 new statuses and note were added by
+                                                                  -- docs/sql/2026-11-19_landing_log_events.sql
   moon_sign           text        NULL                            -- English sign name
   sun_sign            text        NULL
   house               smallint    NULL                            -- 1-12, counted from the Sun sign

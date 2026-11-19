@@ -4,6 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>מה הירח צופן לכם? | תחזית אישית</title>
+  <script>
+    // Personal link from an e-mail (#s=<id>.<code>): keep the code and remove it from the address before
+    // Google Analytics or the Meta Pixel load, so it is never sent to them or kept in the history.
+    (function () {
+      var m = location.hash.match(/^#s=(\d{1,18}\.[0-9a-f]{32})$/);
+      if (!m) return;
+      window.lpVisitCode = m[1];
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    })();
+  </script>
   {% include "_google_analytics.html" %}
   <meta name="description" content="צפו בסרטון, הזינו את תאריך הלידה שלכם וקבלו תחזית אישית לפי מיקום הירח עכשיו." />
   <meta name="theme-color" content="#0b0620" />
@@ -551,9 +561,13 @@
           return;
         }
         DS.setBusy(btn, false);
-        state.forecast = data;
         saveDetails({ dob: $('dob').value });
+        await showForecast(sign, data);
+      });
 
+      // Forecast card, video and sign-up box for a Sun sign (from the date of birth or a personal link)
+      async function showForecast(sign, data) {
+        state.forecast = data;
         $('result-symbol').textContent = sign.symbol + '︎';   // the visitor's own (Sun) sign, matching the title
         $('result-title').textContent = `התחזית שלכם, בני מזל ${data.sun_sign_he}`;
         $('result-summary').textContent =
@@ -573,7 +587,7 @@
         }
         showStep($('step-result'));
         $('subscribe').hidden = false;
-      });
+      }
 
       // Returning visitor: start from the remembered date instead of "30 years ago"
       const DOB_DEFAULT = $('dob').defaultValue;
@@ -619,6 +633,34 @@
       // Returning subscriber: show "we will update you at …" straight away
       if (savedAtLoad.email) showSubscribed(savedAtLoad.email);
       syncForgetButtons();
+
+      // Personal link from an e-mail: skip the intro and show this subscriber's forecast on any device.
+      // If the link is not valid (or the server is unreachable), the page simply starts as usual.
+      async function startVisit(code) {
+        let data;
+        try {
+          data = await postJson('/lp/moon/visit', { s: code, tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
+        } catch (err) {
+          return;
+        }
+        if (state.introDone) return;   // the visitor already moved on by themselves
+        state.introDone = true;
+        introVideo.pause();
+        document.body.classList.remove('is-intro');
+        announce('מפיקים את התחזית שלכם…');
+        await swapStage($('intro-wrap'), $('wheel-wrap'));
+        state.sign = data.sign;
+        await spinTo(data.sign.sign);
+        $('wheel-title').textContent = `גלגל המזלות — מזל ${data.sign.sign_he}`;
+        await showForecast(data.sign, data.forecast);
+        if (data.subscribed) {
+          saveDetails({ email: data.email });
+          showSubscribed(data.email);
+        } else {
+          $('email').value = data.email;   // unsubscribed earlier: offer to sign up again with the same address
+        }
+      }
+      if (window.lpVisitCode) startVisit(window.lpVisitCode);
 
       // "Forget me on this device": clears only what this browser remembers
       document.querySelectorAll('[data-forget-me]').forEach(b => b.addEventListener('click', () => {

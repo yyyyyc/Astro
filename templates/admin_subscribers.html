@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Landing Subscribers — Admin</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0f0f1e; color: #e0e0f0; margin: 0; padding: 1.5rem; }
+    h1 { color: #a78bfa; margin-top: 0; }
+    h2 { color: #a78bfa; margin-top: 2.5rem; font-size: 1.2rem; }
+    a { color: #7c6fcd; }
+    nav { margin-bottom: 1rem; font-size: 0.9rem; }
+    nav a { margin-right: 1rem; }
+    .msg { background: #2e2e5e; border-left: 4px solid #a78bfa; padding: 0.6rem 1rem; margin-bottom: 1rem; border-radius: 4px; }
+    .card { background: #16162e; border: 1px solid #2e2e5e; border-radius: 8px; padding: 1rem 1.2rem; }
+    .modes { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; font-size: 0.85rem; }
+    .modes b { color: #c4b5fd; }
+    .modes .off { color: #a0a0c8; } .modes .on, .modes .set { color: #4ade80; }
+    .modes .dry_run { color: #f0b429; } .modes .bad { color: #f87171; }
+    form.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 1rem; align-items: end; }
+    label { display: block; font-size: 0.8rem; color: #a0a0c8; margin-bottom: 0.2rem; }
+    input[type=text], input[type=email], input[type=search], select {
+      width: 100%; padding: 0.45rem 0.55rem; background: #0f0f1e; color: #e0e0f0;
+      border: 1px solid #3a3a6e; border-radius: 4px; font-size: 0.9rem; color-scheme: dark; }
+    input:focus, select:focus { border-color: #a78bfa; outline: none; }
+    .checks label { display: inline-flex; gap: 0.25rem; align-items: center; margin-right: 0.8rem; color: #e0e0f0; font-size: 0.85rem; }
+    .wide { grid-column: 1 / -1; }
+    .sub { color: #a0a0c8; font-size: 0.8rem; }
+    .linkish { background: none; color: #7c6fcd; padding: 0; text-decoration: underline; font-size: 0.75rem; }
+    button { background: #7c6fcd; color: #fff; border: 0; border-radius: 4px; padding: 0.45rem 0.9rem; cursor: pointer; font-size: 0.85rem; }
+    button.secondary { background: #2e2e5e; }
+    button.danger { background: #8b2e3e; }
+    .search { display: flex; gap: 0.5rem; max-width: 520px; margin-bottom: 1rem; }
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+    th { text-align: left; color: #a78bfa; padding: 0.45rem 0.4rem; border-bottom: 2px solid #2e2e5e; white-space: nowrap; }
+    td { padding: 0.45rem 0.4rem; border-bottom: 1px solid #2e2e5e; vertical-align: top; }
+    td.nowrap { white-space: nowrap; }
+    td.truncate { max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+    tr.inactive td { opacity: 0.5; }
+    .actions { display: flex; gap: 0.3rem; flex-wrap: nowrap; }
+    .actions form { margin: 0; }
+    .actions button { padding: 0.35rem 0.55rem; font-size: 0.78rem; }
+    .tag { font-size: 0.72rem; padding: 0.05rem 0.35rem; border-radius: 3px; background: #2e2e5e; color: #c4b5fd; }
+    .status-sent, .status-resubscribed { color: #4ade80; }
+    .status-failed, .status-unsubscribed { color: #f87171; }
+    .status-dry_run { color: #f0b429; }
+    .status-admin_edit { color: #93c5fd; }
+    .err { color: #f87171; max-width: 320px; word-break: break-word; }
+    .note { max-width: 320px; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <nav><a href="{{ url_for('admin_subscribers') }}">Landing subscribers</a><a href="{{ url_for('admin_recipients') }}">Test recipients</a><a href="/lp/moon">Landing page</a></nav>
+  <h1>&#9790; Landing page subscribers</h1>
+
+  {% if msg %}<div class="msg">{{ msg }}</div>{% endif %}
+
+  <div class="card modes">
+    {% for name, value in modes.items() %}
+      {% set cls = 'bad' if value == 'NOT SET' else value %}
+      <span>{{ name }}: <b class="{{ cls }}">{{ value }}</b></span>
+    {% endfor %}
+    <span>Current Moon period key: <b>{{ current_key or '?' }}</b></span>
+  </div>
+
+  <div class="card" id="edit-card" style="margin-top:1rem" hidden>
+    <h2 id="form-title" style="margin-top:0">Edit subscriber</h2>
+    <form class="grid" id="edit-form" method="post">
+      <input type="hidden" name="q" value="{{ q }}">
+      <div><label for="f-email">E-mail *</label><input type="email" name="email" id="f-email" required></div>
+      <div><label for="f-sign">Sun sign</label>
+        <select name="sun_sign" id="f-sign">
+          <option value="">— none (gets no e-mails) —</option>
+          {% for s in signs %}<option value="{{ s }}">{{ symbols[s] }}&#xFE0E; {{ s }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-key">Last update key (UTC)</label>
+        <input type="text" name="last_update_key" id="f-key" placeholder="2026-11-17T21:19Z" spellcheck="false">
+        <button type="button" class="linkish" data-set-key="{{ current_key or '' }}">current period</button>
+        <button type="button" class="linkish" data-set-key="{{ due_now_key }}">due now</button>
+        <button type="button" class="linkish" data-set-key="">empty</button>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" name="updates_active" id="f-active"> Updates active</label>
+        <label><input type="checkbox" name="marketing_consent" id="f-consent"> Marketing consent</label>
+      </div>
+      <div class="wide">
+        <button type="submit">Save</button>
+        <button type="button" class="secondary" id="f-cancel">Cancel</button>
+        <span class="sub">&nbsp;Turning updates off/on is logged as unsubscribed/resubscribed; other changes as admin_edit.</span>
+      </div>
+    </form>
+  </div>
+
+  <h2>Subscribers ({{ subscribers|length }})</h2>
+  <form class="search" method="get">
+    <input type="search" name="q" value="{{ q }}" placeholder="Filter by e-mail (subscribers and log)">
+    <button type="submit" class="secondary">Filter</button>
+    {% if q %}<a href="{{ url_for('admin_subscribers') }}" style="align-self:center">Clear</a>{% endif %}
+  </form>
+  <div class="table-wrap">
+    <p class="sub" style="margin:0 0 0.5rem">Times are in UTC. A subscriber gets updates when Updates is Yes and a Sun sign is set.
+      "Make due" sends the current update at the next cron run; "Send now" sends it right away without changing the key.</p>
+    <table>
+      <thead><tr>
+        <th>ID</th><th>E-mail</th><th>Sun sign</th><th>Updates</th><th title="Marketing consent">Consent</th>
+        <th>Unsubscribed at</th><th>Last update key</th><th title="Successful sends">Sent</th><th>Last sent</th><th>Created</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for s in subscribers %}
+        <tr class="{{ '' if s.updates_active else 'inactive' }}">
+          <td>{{ s.id }}</td>
+          <td class="truncate" title="{{ s.email }}">{{ s.email }}</td>
+          <td class="nowrap">{% if s.sun_sign %}{{ symbols[s.sun_sign] }}&#xFE0E; {{ s.sun_sign }}{% else %}—{% endif %}</td>
+          <td>{{ 'Yes' if s.updates_active else 'No' }}</td>
+          <td>{{ 'Yes' if s.marketing_consent else 'No' }}</td>
+          <td class="nowrap">{{ s.unsubscribed_at.strftime('%d/%m/%Y %H:%M') if s.unsubscribed_at else '—' }}</td>
+          <td class="nowrap">{{ s.last_update_key or '—' }}{% if s.last_update_key and s.last_update_key == current_key %} <span class="tag">current</span>{% endif %}</td>
+          <td>{{ s.sends or 0 }}</td>
+          <td class="nowrap">{{ s.last_sent.strftime('%d/%m/%Y %H:%M') if s.last_sent else '—' }}</td>
+          <td class="nowrap">{{ s.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td><div class="actions">
+            <button type="button" class="secondary edit-btn" data-id="{{ s.id }}" data-email="{{ s.email }}"
+              data-sign="{{ s.sun_sign or '' }}" data-key="{{ s.last_update_key or '' }}"
+              data-active="{{ 1 if s.updates_active else 0 }}" data-consent="{{ 1 if s.marketing_consent else 0 }}">Edit</button>
+            <form method="post" action="{{ url_for('admin_make_subscriber_due', sid=s.id) }}" data-email="{{ s.email }}"
+                  onsubmit="return confirm('Make ' + this.dataset.email + ' due? The cron job sends the current update at its next run.')">
+              <input type="hidden" name="q" value="{{ q }}"><button type="submit" class="secondary">Make due</button></form>
+            <form method="post" action="{{ url_for('admin_send_subscriber', sid=s.id) }}" data-email="{{ s.email }}"
+                  onsubmit="return confirm('Send the current update to ' + this.dataset.email + ' now?')">
+              <input type="hidden" name="q" value="{{ q }}"><button type="submit">Send now</button></form>
+            <form method="post" action="{{ url_for('admin_delete_subscriber', sid=s.id) }}" data-email="{{ s.email }}"
+                  onsubmit="return confirm('Delete ' + this.dataset.email + '? This cannot be undone (log rows are kept).')">
+              <input type="hidden" name="q" value="{{ q }}"><button type="submit" class="danger">Delete</button></form>
+          </div></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="11">No subscribers{% if q %} match "{{ q }}"{% endif %}.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h2>E-mail log (latest {{ log_limit }})</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>ID</th><th>Time (UTC)</th><th>Subscriber</th><th>Status</th><th>Note</th><th>Period key</th>
+        <th>Moon</th><th>Sun</th><th>House</th><th>Group</th><th>Subject</th><th>Message ID</th><th>Error</th>
+      </tr></thead>
+      <tbody>
+      {% for l in logs %}
+        <tr>
+          <td>{{ l.id }}</td>
+          <td class="nowrap">{{ l.sent_at.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+          <td>{{ l.email }}{% if l.landing_email_id %} <span style="color:#777">#{{ l.landing_email_id }}</span>{% endif %}</td>
+          <td class="status-{{ l.status }}">{{ l.status }}</td>
+          <td class="note">{{ l.note or '' }}</td>
+          <td class="nowrap">{{ l.update_key or '' }}</td>
+          <td>{{ l.moon_sign or '' }}</td>
+          <td>{{ l.sun_sign or '' }}</td>
+          <td>{{ l.house or '' }}</td>
+          <td>{{ l.forecast_group or '' }}</td>
+          <td class="truncate" title="{{ l.subject or '' }}" dir="auto">{{ l.subject or '' }}</td>
+          <td class="truncate" title="{{ l.provider_message_id or '' }}">{{ l.provider_message_id or '' }}</td>
+          <td class="err">{{ l.error or '' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="13">Nothing logged yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top:1.5rem"><a href="/">&#8592; Back to the site</a></p>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const card = $('edit-card'), form = $('edit-form');
+    const saveUrl = id => `{{ url_for('admin_save_subscriber', sid=0) }}`.replace('/0/', `/${id}/`);
+    document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', () => {
+      const d = btn.dataset;
+      form.action = saveUrl(d.id);
+      $('f-email').value = d.email; $('f-sign').value = d.sign; $('f-key').value = d.key;
+      $('f-active').checked = d.active === '1'; $('f-consent').checked = d.consent === '1';
+      $('form-title').textContent = 'Edit subscriber #' + d.id;
+      card.hidden = false;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      $('f-email').focus({ preventScroll: true });
+    }));
+    document.querySelectorAll('[data-set-key]').forEach(b => b.addEventListener('click', () => { $('f-key').value = b.dataset.setKey; }));
+    $('f-cancel').addEventListener('click', () => { card.hidden = true; });
+  </script>
+</body>
+</html>
