@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify, send_from_directory, Response, redirect, url_for
 import hmac
+import threading
 from urllib.parse import urlparse
 import ephem
 import math
@@ -815,6 +816,45 @@ def unsubscribe_url(landing_email_id):
     token = unsubscribe_token(landing_email_id)
     return f"{site_url()}/lp/moon/unsubscribe/{landing_email_id}/{token}" if token else None
 
+
+# tbl_landing_emails.last_update_key: the start of a Moon sign period, in UTC, to the minute
+UPDATE_KEY_FMT = "%Y-%m-%dT%H:%MZ"
+
+
+def moon_update_key(period):
+    return period["start"].astimezone(pytz.utc).strftime(UPDATE_KEY_FMT)
+
+
+def current_moon_update_key():
+    """Key of the Moon sign period now, or None if it cannot be worked out (sign-up must still succeed)."""
+    try:
+        return moon_update_key(moon_period_at(datetime.now(pytz.utc)))
+    except Exception as exc:
+        app.logger.error("Could not work out the current Moon period: %s", type(exc).__name__)
+        return None
+
+
+def landing_welcome_mode():
+    """LANDING_WELCOME: off (default) | dry_run | on — the welcome e-mail sent right after sign-up."""
+    mode = os.environ.get("LANDING_WELCOME", "").strip().lower()
+    return mode if mode in ("off", "dry_run", "on") else "off"
+
+
+def start_landing_welcome(landing_email_id, email, sun_sign):
+    """Send the welcome e-mail in the background so the visitor does not wait for the mail provider."""
+    mode = landing_welcome_mode()
+    if mode == "off" or not sun_sign:
+        return
+
+    def work():
+        import send_emails  # imported here: send_emails imports this module
+        try:
+            send_emails.send_welcome(landing_email_id, email, sun_sign, dry_run=mode == "dry_run")
+        except Exception as exc:  # never let a background failure surface anywhere but the log
+            app.logger.error("Welcome e-mail failed: %s", type(exc).__name__)
+
+    threading.Thread(target=work, daemon=True).start()
+
 ZODIAC_SIGNS_HE = {
     "Aries": "טלה", "Taurus": "שור", "Gemini": "תאומים", "Cancer": "סרטן",
     "Leo": "אריה", "Virgo": "בתולה", "Libra": "מאזניים", "Scorpio": "עקרב",
@@ -854,33 +894,43 @@ def parse_landing_dob(value):
 def save_landing_email(email, marketing_consent, sun_sign=None):
     """Store a landing page e-mail once, in lower case, with the visitor's Sun sign (English name; the
     date of birth itself is never stored). Consent, once given, is not cleared by a later submission
-    without the checkbox; a later submission with a sign replaces the stored sign. A failure is logged
-    without the address and never blocks the visitor."""
+    without the checkbox; a later submission with a sign replaces the stored sign. A new or returning
+    (previously unsubscribed) subscriber is marked as having seen the current Moon sign, so updates start
+    with the next one. A failure is logged without the address and never blocks the visitor.
+
+    Returns (id, kind) with kind "new", "reactivated" or "existing", or None if it could not be saved."""
     engine = get_engine()
     if engine is None:
         app.logger.error("Could not save landing page e-mail: ASTRO_DB_URL is not set")
-        return
+        return None
     try:
         with engine.begin() as conn:
-            conn.execute(
+            row = conn.execute(
                 text(
                     """
-                    INSERT INTO tbl_landing_emails (email, marketing_consent, sun_sign)
-                    VALUES (:email, :consent, :sun_sign)
+                    WITH prev AS (SELECT updates_active FROM tbl_landing_emails WHERE email = :email)
+                    INSERT INTO tbl_landing_emails (email, marketing_consent, sun_sign, last_update_key)
+                    VALUES (:email, :consent, :sun_sign, :key)
                     ON CONFLICT (email) DO UPDATE
                     SET marketing_consent = tbl_landing_emails.marketing_consent OR EXCLUDED.marketing_consent,
                         sun_sign = COALESCE(EXCLUDED.sun_sign, tbl_landing_emails.sun_sign),
-                        -- signing up again after unsubscribing starts updates afresh from the next Moon sign
                         last_update_key = CASE WHEN tbl_landing_emails.updates_active
-                                               THEN tbl_landing_emails.last_update_key END,
+                                               THEN COALESCE(tbl_landing_emails.last_update_key,
+                                                             EXCLUDED.last_update_key)
+                                               ELSE EXCLUDED.last_update_key END,
                         updates_active = true,
                         unsubscribed_at = NULL
+                    RETURNING id, (SELECT updates_active FROM prev) AS prev_active
                     """
                 ),
-                {"email": email.lower(), "consent": marketing_consent, "sun_sign": sun_sign},
-            )
+                {"email": email.lower(), "consent": marketing_consent, "sun_sign": sun_sign,
+                 "key": current_moon_update_key()},
+            ).fetchone()
     except Exception as exc:
         app.logger.error("Could not save landing page e-mail: %s", type(exc).__name__)
+        return None
+    kind = "new" if row.prev_active is None else ("existing" if row.prev_active else "reactivated")
+    return row.id, kind
 
 
 @app.route("/lp/moon/sign", methods=["POST"])
@@ -899,7 +949,11 @@ def landing_moon_subscribe():
     if len(email) > 254 or not EMAIL_RE.match(email):
         return jsonify({"error": "כתובת המייל אינה תקינה."}), 400
     dob = parse_landing_dob(data.get("dob"))  # used only to work out the Sun sign; not stored
-    save_landing_email(email, data.get("marketing_consent") is True, sun_sign_on(dob) if dob else None)
+    sun_sign = sun_sign_on(dob) if dob else None
+    saved = save_landing_email(email, data.get("marketing_consent") is True, sun_sign)
+    # Welcome only a new or returning subscriber: submitting the same address again sends nothing
+    if saved and saved[1] in ("new", "reactivated"):
+        start_landing_welcome(saved[0], email.lower(), sun_sign)
     return jsonify({"ok": True})
 
 

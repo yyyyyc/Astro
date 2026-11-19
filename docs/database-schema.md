@@ -59,11 +59,12 @@ public.tbl_landing_emails
   updates_active  boolean     NOT NULL DEFAULT true  -- false after unsubscribing from forecast updates; a new sign-up sets it back
   unsubscribed_at timestamptz NULL                   -- last unsubscribe from updates; cleared by a new sign-up
   last_update_key text        NULL                   -- start (UTC, 'YYYY-MM-DDTHH:MMZ') of the Moon sign period last sent
-                                                     -- (or first seen in); claimed before sending. Added by
+                                                     -- (or signed up in); set by sign-up, claimed before sending. Added by
                                                      -- docs/sql/2026-11-18_landing_updates.sql
 
 public.tbl_landing_email_log
-  -- One row per forecast update e-mail attempt to a landing page subscriber (send_emails.py, 5.8).
+  -- One row per forecast update or welcome e-mail attempt to a landing page subscriber (send_emails.py, 5.8).
+  -- Welcome rows: update_key = the period at sign-up; recognised by their subject.
   id                  bigint      NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY
   landing_email_id    bigint      NULL REFERENCES tbl_landing_emails(id) ON DELETE SET NULL
   email               text        NOT NULL                        -- copied, so the log survives a deleted subscriber

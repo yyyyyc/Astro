@@ -31,7 +31,7 @@ It answers four questions, plus a Hebrew landing page for ad campaigns:
 | Moon of Transit | Moon of Transit page | Which sign is the real Moon in right now, when does it move on, and what does that mean for me? | ✅ |
 | Moon of Transit (landing) | `/lp/moon` | Same as Moon of Transit, as a short guided funnel in Hebrew for visitors from ads (e.g. Facebook) | ✅ |
 | Scheduled e-mails (test) | Render Cron Job + `/admin/recipients` | Sends the current Moon of Transit forecast by e-mail to test recipients on the days and times they chose | ✅ |
-| Forecast update e-mails | Render Cron Job + `/lp/moon/unsubscribe/…` | Sends landing page subscribers their own forecast once per Moon sign; off until `LANDING_UPDATES` is set | ✅ |
+| Forecast update e-mails | Render Cron Job + `/lp/moon/unsubscribe/…` | Sends landing page subscribers their own forecast once per Moon sign, and a welcome e-mail right after sign-up; off until `LANDING_UPDATES` / `LANDING_WELCOME` are set | ✅ |
 
 The site is **free and open**. There are no user accounts or payments (see section 8). The only login is the
 password-protected admin page (2.5).
@@ -315,8 +315,9 @@ The same cron run (`send_emails.py`) then runs a second, independent job, switch
    only between **08:00 and 21:00 Israel time**; a change at night waits for 08:00.
 3. **Which update:** `last_update_key` holds the start (UTC, to the minute) of the Moon sign period last sent.
    A stored start within 1 hour of the current one counts as the same period (the start is computed to about
-   a second, so two runs may differ slightly). A subscriber seen for the **first time** is only marked, with no
-   e-mail: they have just seen the current forecast on the page, so their first update comes with the next sign.
+   a second, so two runs may differ slightly). **Sign-up** sets it to the current period (for a new subscriber,
+   or one returning after unsubscribing; a repeated sign-up keeps it), so the first update comes with the next
+   sign even when the sign changes at night. A row with no key (saved before this) is only marked, with no e-mail.
 4. **Claim before send:** `last_update_key` is moved to the new period only if no other run moved it first,
    so a Moon sign is never sent twice.
 5. **Content (Hebrew):** subject "הירח עבר למזל ‹Moon› – התחזית שלכם, בני מזל ‹Sun›"; which house that is for
@@ -331,9 +332,19 @@ The same cron run (`send_emails.py`) then runs a second, independent job, switch
    `updates_active` back to true and restarts updates from the next Moon sign. With `LANDING_UPDATES=on` and no
    `UNSUBSCRIBE_SECRET`, the job sends nothing.
 8. `SITE_URL` (default `https://tertiary-progression.onrender.com`) is the base of the links in the e-mail.
+9. **Welcome e-mail** ✅: right after sign-up on `/lp/moon`, the **web service** (not the cron job) sends a
+   welcome e-mail in a background thread, so the page does not wait. Switched by **`LANDING_WELCOME`** on the
+   web service: `off` (default), `dry_run` or `on`; `EMAIL_DRY_RUN=1` also makes it a dry run. Sent only to a
+   **new** address or one **returning after unsubscribing**; submitting an active address again sends
+   nothing. Sent at any hour (it answers the visitor's own action), only when the Sun sign is known. Content:
+   subject "נרשמתם לעדכוני תחזית הירח – התחזית שלכם עכשיו, בני מזל ‹Sun›"; a thank-you and how often updates
+   come; the current Moon sign, house and until when; the current forecast text; a link to `/lp/moon`; and the
+   unsubscribe link and headers (needs `UNSUBSCRIBE_SECRET` and `BREVO_API_KEY`/`EMAIL_FROM` on the web
+   service). Logged in `tbl_landing_email_log` like an update, with the current period as `update_key`; a
+   welcome row is recognised by its subject.
 
 ❌ The sender is still a Gmail address. For delivery to inboxes, a domain verified in Brevo is needed before
-`LANDING_UPDATES=on`. ❓ See section 9.
+`LANDING_UPDATES=on` or `LANDING_WELCOME=on` for real visitors. ❓ See section 9.
 
 ## 6. Mapping calculation results to forecast texts ✅
 
@@ -376,8 +387,9 @@ Rules:
   `tbl_test_recipients`. The cron job (5.7) updates `last_run` and inserts a row into `tbl_test_email_log`
   for every attempt.
 - **Update e-mails** ✅: the cron job (5.8) updates `last_update_key` in `tbl_landing_emails` and inserts a row
-  into `tbl_landing_email_log` for every attempt; the unsubscribe page updates `updates_active` and
-  `unsubscribed_at`. These are the only other tables the site writes.
+  into `tbl_landing_email_log` for every attempt; sign-up sets `last_update_key` and the welcome e-mail adds a
+  log row too; the unsubscribe page updates `updates_active` and `unsubscribed_at`. These are the only other
+  tables the site writes.
 - **Meta Pixel** ✅: when `META_PIXEL_ID` is set, `/lp/moon` loads the Pixel and sends `PageView` on load and
   `Lead` once per visit after a valid e-mail sign-up. Automatic configuration is off, and the e-mail, date of birth and
   forecast are not sent. No other page has the Pixel.
@@ -478,7 +490,7 @@ audio files are not used.
 | Moon of Transit ‏(ירח בטרנזיט) | עמוד הירח בטרנזיט | באיזה מזל נמצא הירח האמיתי עכשיו, מתי יעבור הלאה, ומה המשמעות עבורי? | ✅ |
 | ירח בטרנזיט (עמוד נחיתה) | `/lp/moon` | כמו ירח בטרנזיט, כתהליך קצר ומודרך בעברית למבקרים שמגיעים ממודעות (למשל פייסבוק) | ✅ |
 | מיילים מתוזמנים (בדיקה) | Render Cron Job + ‏`/admin/recipients` | שולח במייל את תחזית הירח בטרנזיט הנוכחית לנמעני בדיקה בימים ובשעות שבחרו | ✅ |
-| מיילי עדכון תחזית | Render Cron Job + ‏`/lp/moon/unsubscribe/…` | שולח לנרשמים בעמוד הנחיתה את התחזית האישית שלהם פעם אחת בכל מזל של הירח; כבוי עד שמגדירים `LANDING_UPDATES` | ✅ |
+| מיילי עדכון תחזית | Render Cron Job + ‏`/lp/moon/unsubscribe/…` | שולח לנרשמים בעמוד הנחיתה את התחזית האישית שלהם פעם אחת בכל מזל של הירח, ומייל ברוכים הבאים מיד אחרי ההרשמה; כבוי עד שמגדירים `LANDING_UPDATES` / ‏`LANDING_WELCOME` | ✅ |
 
 האתר **חינמי ופתוח**. אין חשבונות משתמש או תשלומים (ראו סעיף 8). ההתחברות היחידה היא לעמוד הניהול המוגן
 בסיסמה (2.5).
@@ -742,8 +754,9 @@ audio files are not used.
    **08:00 ל-21:00 שעון ישראל**; שינוי בלילה ממתין ל-08:00.
 3. **איזה עדכון:** ‏`last_update_key` שומר את תחילת תקופת המזל של הירח שנשלחה לאחרונה (UTC, ברמת הדקה).
    תחילה שמורה בטווח של שעה מהתחילה הנוכחית נחשבת לאותה תקופה (התחילה מחושבת בדיוק של כשנייה, ולכן שתי ריצות
-   עשויות להיות שונות מעט). נרשם שנראה **בפעם הראשונה** רק מסומן, בלי מייל: הוא בדיוק ראה את התחזית הנוכחית
-   בעמוד, ולכן העדכון הראשון שלו מגיע עם המזל הבא.
+   עשויות להיות שונות מעט). **ההרשמה** מגדירה אותו לתקופה הנוכחית (לנרשם חדש, או לנרשם שחוזר אחרי הסרה; הרשמה
+   חוזרת שומרת אותו), כך שהעדכון הראשון מגיע עם המזל הבא גם כשהמזל מתחלף בלילה. שורה ללא ערך (שנשמרה לפני כן)
+   רק מסומנת, בלי מייל.
 4. **תפיסה לפני שליחה:** ‏`last_update_key` עובר לתקופה החדשה רק אם אף ריצה אחרת לא העבירה אותו קודם, כך
    שמזל של הירח לעולם אינו נשלח פעמיים.
 5. **תוכן (בעברית):** נושא "הירח עבר למזל ‹ירח› – התחזית שלכם, בני מזל ‹שמש›"; איזה בית זה עבור הנרשם ועד מתי
@@ -756,9 +769,17 @@ audio files are not used.
    את `unsubscribed_at`. הרשמה מחדש בעמוד מחזירה את `updates_active` לאמת ומתחילה את העדכונים מחדש מהמזל הבא.
    כאשר `LANDING_UPDATES=on` ואין `UNSUBSCRIBE_SECRET`, המשימה לא שולחת דבר.
 8. ‏`SITE_URL` (ברירת מחדל `https://tertiary-progression.onrender.com`) הוא הבסיס של הקישורים במייל.
+9. **מייל ברוכים הבאים** ✅: מיד אחרי ההרשמה ב-`/lp/moon`, **שירות האתר** (לא משימת ה-Cron) שולח מייל ברוכים
+   הבאים ברקע, כך שהעמוד אינו ממתין. נשלט על ידי **`LANDING_WELCOME`** בשירות האתר: `off` (ברירת מחדל), `dry_run`
+   או `on`; גם `EMAIL_DRY_RUN=1` הופך אותו להרצה יבשה. נשלח רק לכתובת **חדשה** או לכתובת **שחוזרת אחרי הסרה**;
+   שליחה חוזרת של כתובת פעילה אינה שולחת דבר. נשלח בכל שעה (זו תגובה לפעולה של המבקר עצמו), ורק כשמזל השמש ידוע.
+   תוכן: נושא "נרשמתם לעדכוני תחזית הירח – התחזית שלכם עכשיו, בני מזל ‹שמש›"; תודה וכל כמה זמן מגיעים העדכונים;
+   מזל הירח הנוכחי, הבית ועד מתי; טקסט התחזית הנוכחי; קישור ל-`/lp/moon`; וקישור וכותרות ההסרה (נדרשים
+   `UNSUBSCRIBE_SECRET` ו-`BREVO_API_KEY`/`EMAIL_FROM` בשירות האתר). נרשם ב-`tbl_landing_email_log` כמו עדכון,
+   עם התקופה הנוכחית כ-`update_key`; שורת ברוכים הבאים מזוהה לפי הנושא.
 
 ❌ השולח הוא עדיין כתובת Gmail. כדי שהמיילים יגיעו לתיבת הדואר הנכנס, נדרש דומיין מאומת ב-Brevo לפני
-`LANDING_UPDATES=on`. ❓ ראו סעיף 9.
+`LANDING_UPDATES=on` או `LANDING_WELCOME=on` למבקרים אמיתיים. ❓ ראו סעיף 9.
 
 ## 6. מיפוי תוצאות החישוב לטקסטי תחזית ✅
 
@@ -797,8 +818,8 @@ audio files are not used.
 - **נמעני מיילים לבדיקה ויומן שליחות** ✅: עמוד הניהול (2.5) מוסיף, עורך ומוחק שורות ב-`tbl_test_recipients`.
   משימת ה-Cron ‏(5.7) מעדכנת את `last_run` ומוסיפה שורה ל-`tbl_test_email_log` בכל ניסיון.
 - **מיילי עדכון** ✅: משימת ה-Cron ‏(5.8) מעדכנת את `last_update_key` ב-`tbl_landing_emails` ומוסיפה שורה
-  ל-`tbl_landing_email_log` בכל ניסיון; עמוד ההסרה מעדכן את `updates_active` ו-`unsubscribed_at`. אלה הטבלאות
-  היחידות הנוספות שהאתר כותב אליהן.
+  ל-`tbl_landing_email_log` בכל ניסיון; ההרשמה מגדירה את `last_update_key` ומייל ברוכים הבאים מוסיף גם הוא שורה
+  ליומן; עמוד ההסרה מעדכן את `updates_active` ו-`unsubscribed_at`. אלה הטבלאות היחידות הנוספות שהאתר כותב אליהן.
 - **הפיקסל של Meta** ✅: כאשר `META_PIXEL_ID` מוגדר, העמוד `/lp/moon` טוען את הפיקסל ושולח `PageView` בטעינה
   ו-`Lead` פעם אחת בכל ביקור אחרי הרשמה עם מייל תקין. התצורה האוטומטית כבויה, והמייל, תאריך הלידה והתחזית אינם נשלחים.
   בשאר העמודים אין פיקסל.

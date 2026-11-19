@@ -15,6 +15,9 @@ Each run does two independent jobs:
    tbl_landing_email_log. A subscriber seen for the first time is only marked (no e-mail), so the first
    update comes with the next Moon sign. Controlled by LANDING_UPDATES (default off).
 
+The welcome e-mail sent right after sign-up (send_welcome) is also defined here, but the web service
+sends it, in a background thread, when LANDING_WELCOME (on the web service) is dry_run or on.
+
 Environment:
     ASTRO_DB_URL        database connection (same as the web service)
     BREVO_API_KEY       Brevo API key used to send the e-mails (Settings > SMTP & API > API Keys)
@@ -33,6 +36,7 @@ import argparse
 import html
 import os
 import sys
+from collections import namedtuple
 from datetime import datetime, timedelta
 
 import pytz
@@ -269,14 +273,14 @@ def updates_mode():
 
 def update_key(period):
     """Stored in last_update_key: the start of the Moon sign period, in UTC, to the minute."""
-    return period["start"].astimezone(pytz.utc).strftime("%Y-%m-%dT%H:%MZ")
+    return astro.moon_update_key(period)
 
 
 def is_same_period(stored_key, period):
     if not stored_key:
         return False
     try:
-        stored = pytz.utc.localize(datetime.strptime(stored_key, "%Y-%m-%dT%H:%MZ"))
+        stored = pytz.utc.localize(datetime.strptime(stored_key, astro.UPDATE_KEY_FMT))
     except ValueError:
         return False
     return abs(stored - period["start"].astimezone(pytz.utc)) <= SAME_PERIOD_TOLERANCE
@@ -287,9 +291,38 @@ def in_send_window(now_utc):
     return UPDATES_WINDOW[0] <= local.hour < UPDATES_WINDOW[1]
 
 
-def build_update_email(subscriber, now_utc):
-    """Subject, HTML, plain text and List-Unsubscribe headers of one subscriber's update, plus log values."""
-    t = UPDATE_TEXTS
+WELCOME_TEXTS = {
+    "subject": "נרשמתם לעדכוני תחזית הירח – התחזית שלכם עכשיו, בני מזל {sun}",
+    "intro": "תודה שנרשמתם! מעכשיו נשלח לכם את התחזית בכל פעם שהירח עובר למזל חדש (בערך כל יומיים וחצי). "
+             "כרגע הירח במזל <b>{moon}</b>, בבית ה-{house} ממזל השמש שלכם ({sun}), עד {end}. זו התחזית שלכם:",
+    "cta": "לתחזית באתר",
+    "footer": "קיבלתם מייל זה כי נרשמתם באתר לעדכון כשתחזית הירח משתנה.",
+    "unsubscribe": "להפסקת העדכונים",
+}
+
+Subscriber = namedtuple("Subscriber", "id email sun_sign")
+
+
+def build_welcome_email(subscriber, now_utc):
+    return build_update_email(subscriber, now_utc, WELCOME_TEXTS)
+
+
+def send_welcome(landing_email_id, email, sun_sign, dry_run=False, now_utc=None):
+    """Welcome e-mail right after sign-up (called by the web service in a background thread):
+    the current forecast and an unsubscribe link. Logged to tbl_landing_email_log. Returns the status."""
+    engine = astro.get_engine()
+    if engine is None:
+        raise RuntimeError("ASTRO_DB_URL is not set")
+    now_utc = now_utc or datetime.now(pytz.utc)
+    key = update_key(astro.moon_period_at(now_utc))
+    return deliver_update(engine, Subscriber(landing_email_id, email, sun_sign), key,
+                          dry_run or env_dry_run(), now_utc, build=build_welcome_email)
+
+
+def build_update_email(subscriber, now_utc, texts=None):
+    """Subject, HTML, plain text and List-Unsubscribe headers of one subscriber's update (or, with
+    WELCOME_TEXTS, the welcome e-mail), plus log values."""
+    t = texts or UPDATE_TEXTS
     signs = astro.ZODIAC_SIGNS_HE
     moon = astro.moon_transit_for_sun_sign(subscriber.sun_sign, now_utc)
     period = moon["period"]
@@ -327,12 +360,12 @@ def build_update_email(subscriber, now_utc):
     return subject, html_doc, plain, headers, log
 
 
-def deliver_update(engine, subscriber, key, dry_run, now_utc):
-    """Build and send one update and log the attempt. Returns the logged status."""
+def deliver_update(engine, subscriber, key, dry_run, now_utc, build=build_update_email):
+    """Build and send one update (or welcome) and log the attempt. Returns the logged status."""
     log = {"moon_sign": None, "house": None, "forecast_group": None}
     subject = message_id = error = None
     try:
-        subject, html_doc, plain, headers, log = build_update_email(subscriber, now_utc)
+        subject, html_doc, plain, headers, log = build(subscriber, now_utc)
         if dry_run:
             status = "dry_run"
         else:
